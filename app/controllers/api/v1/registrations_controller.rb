@@ -1,6 +1,11 @@
 class Api::V1::RegistrationsController < ApplicationController
   skip_before_action :authorized, only: [:create]
-  # Cria um novo usuário (signup)
+  before_action :authorized, except: [:create]
+
+  def show
+    render json: current_user, status: :ok
+  end
+
   def create
     user = User.new(user_params)
 
@@ -12,15 +17,17 @@ class Api::V1::RegistrationsController < ApplicationController
     end
   end
 
-  private
-
-  # Parâmetros permitidos para criar o usuário
-  def user_params
-    params.require(:user).permit(:email, :password, :password_confirmation)
+  def update
+    if current_user.update(user_params)
+      render json: current_user, status: :ok
+    else
+      render json: { errors: current_user.errors.full_messages }, status: :unprocessable_entity
+    end
   end
 
-  # Gera o token JWT
-  def encode_token(payload)
-    JWT.encode(payload, Rails.application.secrets.secret_key_base)
+  private
+
+  def user_params
+    params.require(:user).permit(:first_name, :last_name, :email, :password, :password_confirmation, :birthdate, :phone_number, :address, :gender)
   end
 end
