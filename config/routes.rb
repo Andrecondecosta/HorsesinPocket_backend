@@ -3,6 +3,9 @@ Rails.application.routes.draw do
     namespace :v1 do
       post '/login', to: 'sessions#create'
       post '/signup', to: 'registrations#create'
+      get '/profile', to: 'registrations#show'
+      put '/update', to: 'registrations#update'
+      get 'home/index'
     end
   end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
