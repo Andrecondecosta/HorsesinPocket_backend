@@ -15,6 +15,12 @@ gem "puma", ">= 5.0"
 # gem "jbuilder"
 gem 'devise'
 gem 'jwt'
+gem 'cloudinary'
+gem 'activestorage-cloudinary-service'
+gem 'dotenv-rails', groups: [:development, :test]
+gem 'carrierwave'
+gem 'ruby-vips', '~> 2.0'
+
 
 # Use Redis adapter to run Action Cable in production
 # gem "redis", ">= 4.0.1"
