@@ -1,10 +1,9 @@
 class Horse < ApplicationRecord
   belongs_to :user
-  has_many_attached :images  # Atualizar para has_many_attached
-  has_many :photos, dependent: :destroy
-  has_many :videos, dependent: :destroy
-  has_many :xrays, dependent: :destroy
+  has_many_attached :images
 
-  validates :name, presence: true
-  validates :age, numericality: { only_integer: true, greater_than: 0 }
+  validates :name, :age, :height_cm, :gender, :color, presence: true
+  validates :gender, inclusion: { in: ['gelding', 'mare', 'stallion'], message: "%{value} is not a valid gender" }
+  validates :training_level, length: { maximum: 100 }
+  validates :color, length: { maximum: 20 } # Ajuste do comprimento de cor para aceitar mais valores
 end
