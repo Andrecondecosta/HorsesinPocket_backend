@@ -3,10 +3,11 @@ class Api::V1::HorsesController < ApplicationController
 
   # Lista todos os cavalos do usuário autenticado
   def index
-    @horses = current_user.horses.includes(:ancestors, images_attachments: :blob)
+    @horses = current_user.horses.includes(:ancestors, images_attachments: :blob, videos_attachments: :blob)
     render json: @horses.map { |horse|
       horse.as_json.merge({
         images: horse.images.map { |image| url_for(image) },
+        videos: horse.videos.map { |video| url_for(video) },
         ancestors: horse.ancestors
       })
     }
@@ -16,6 +17,7 @@ class Api::V1::HorsesController < ApplicationController
   def show
     render json: @horse.as_json.merge({
       images: @horse.images.map { |image| url_for(image) },
+      videos: @horse.videos.map { |video| url_for(video) },
       ancestors: @horse.ancestors
     })
   end
@@ -42,6 +44,7 @@ class Api::V1::HorsesController < ApplicationController
 
       render json: @horse.as_json.merge({
         images: @horse.images.map { |image| url_for(image) },
+        videos: @horse.videos.map { |video| url_for(video) },
         ancestors: @horse.ancestors
       }), status: :created
     else
@@ -49,17 +52,18 @@ class Api::V1::HorsesController < ApplicationController
     end
   end
 
-
-
   # Atualiza um cavalo existente
   def update
     ActiveRecord::Base.transaction do
       if @horse.update(horse_params)
         purge_images if params[:deleted_images].present?
+        purge_videos if params[:deleted_videos].present?
         attach_images(params[:horse][:images]) if params[:horse][:images].present?
+        attach_videos(params[:horse][:videos]) if params[:horse][:videos].present?
 
         render json: @horse.as_json.merge({
           images: @horse.images.map { |img| url_for(img) },
+          videos: @horse.videos.map { |vid| url_for(vid) },
           ancestors: @horse.ancestors
         })
       else
@@ -71,6 +75,7 @@ class Api::V1::HorsesController < ApplicationController
   # Deleta um cavalo
   def destroy
     @horse.images.purge if @horse.images.attached?
+    @horse.videos.purge if @horse.videos.attached?
     @horse.destroy
     head :no_content
   end
@@ -85,6 +90,14 @@ class Api::V1::HorsesController < ApplicationController
     end
   end
 
+  # Função que purga vídeos específicos do cavalo
+  def purge_videos
+    params[:deleted_videos].each do |video_url|
+      video = @horse.videos.find { |vid| url_for(vid) == video_url }
+      video.purge if video
+    end
+  end
+
   # Função para anexar novas imagens, evitando duplicações
   def attach_images(new_images)
     new_images.each do |image|
@@ -93,6 +106,24 @@ class Api::V1::HorsesController < ApplicationController
       end
     end
   end
+
+  # Função para anexar novos vídeos, evitando duplicações
+  def attach_videos(new_videos)
+    new_videos.each do |video|
+      # Criando blobs para enviar ao Cloudinary
+      blob = ActiveStorage::Blob.create_after_upload!(
+        io: video.tempfile,
+        filename: video.original_filename,
+        content_type: video.content_type,
+        service_name: 'cloudinary',
+        key: "HorsesInPocket/Videos/#{SecureRandom.hex}/#{video.original_filename}"
+      )
+
+      # Associando o blob ao vídeo
+      @horse.videos.attach(blob)
+    end
+  end
+
 
   # Encontra o cavalo baseado no ID
   def set_horse
@@ -103,12 +134,8 @@ class Api::V1::HorsesController < ApplicationController
   def horse_params
     params.require(:horse).permit(
       :name, :age, :height_cm, :description, :gender, :color,
-      :training_level, :piroplasmosis, images: [],
+      :training_level, :piroplasmosis, images: [], videos: [],
       ancestors_attributes: [:relation_type, :name, :breeder, :breed, :_destroy]
     )
   end
-
-
-
-
 end

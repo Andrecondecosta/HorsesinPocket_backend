@@ -1,6 +1,7 @@
 class Horse < ApplicationRecord
   belongs_to :user
   has_many_attached :images
+  has_many_attached :videos
   has_many :ancestors, dependent: :destroy
 
   accepts_nested_attributes_for :ancestors

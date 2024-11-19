@@ -3,7 +3,21 @@ class Api::V1::VideosController < ApplicationController
 
   # Upload de um vídeo para um cavalo
   def create
-    @video = @horse.videos.build(video_params)
+    @video = @horse.videos.build
+
+    if params[:video][:file]
+      # Criando o blob manualmente para enviar ao Cloudinary
+      blob = ActiveStorage::Blob.create_after_upload!(
+        io: params[:video][:file].tempfile,
+        filename: params[:video][:file].original_filename,
+        content_type: params[:video][:file].content_type,
+        service_name: 'cloudinary',
+        key: "HorsesInPocket/Videos/#{SecureRandom.hex}/#{params[:video][:file].original_filename}"
+      )
+
+      # Associando o blob ao vídeo
+      @video.video.attach(blob)
+    end
 
     if @video.save
       render json: { url: url_for(@video.video), message: 'Vídeo carregado com sucesso' }, status: :created
@@ -24,10 +38,5 @@ class Api::V1::VideosController < ApplicationController
   # Encontra o cavalo associado ao vídeo
   def set_horse
     @horse = current_user.horses.find(params[:horse_id])
-  end
-
-  # Permite os parâmetros permitidos para o upload de vídeo
-  def video_params
-    params.require(:video).permit(:video)
   end
 end
