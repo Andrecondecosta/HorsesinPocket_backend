@@ -2,6 +2,7 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       resources :horses do
+        resources :ancestors, only: [:index, :create, :update, :destroy]
         # Rotas aninhadas para as mídias
         resources :photos, only: [:create, :destroy]
         resources :videos, only: [:create, :destroy]
