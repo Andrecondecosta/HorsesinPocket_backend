@@ -55,7 +55,27 @@ class Api::V1::HorsesController < ApplicationController
   # Atualiza um cavalo existente
   def update
     ActiveRecord::Base.transaction do
-      if @horse.update(horse_params)
+      if @horse.update(horse_params.except(:ancestors_attributes))
+        # Atualiza ou cria ancestrais
+        if params[:horse][:ancestors_attributes].present?
+          # Processar ancestrais enviados
+          sent_relation_types = params[:horse][:ancestors_attributes].map { |a| a[:relation_type] }
+
+          # Atualizar ou criar ancestrais
+          params[:horse][:ancestors_attributes].each do |ancestor_params|
+            ancestor = @horse.ancestors.find_or_initialize_by(relation_type: ancestor_params[:relation_type])
+            ancestor.update!(
+              name: ancestor_params[:name],
+              breeder: ancestor_params[:breeder],
+              breed: ancestor_params[:breed]
+            )
+          end
+
+          # Excluir ancestrais que não estão nos parâmetros enviados
+          @horse.ancestors.where.not(relation_type: sent_relation_types).destroy_all
+        end
+
+        # Atualizar anexos, se necessário
         purge_images if params[:deleted_images].present?
         purge_videos if params[:deleted_videos].present?
         attach_images(params[:horse][:images]) if params[:horse][:images].present?
@@ -67,10 +87,13 @@ class Api::V1::HorsesController < ApplicationController
           ancestors: @horse.ancestors
         })
       else
-        render json: @horse.errors, status: :unprocessable_entity
+        render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
       end
     end
   end
+
+
+
 
   # Deleta um cavalo
   def destroy
@@ -84,6 +107,7 @@ class Api::V1::HorsesController < ApplicationController
 
   # Função que purga imagens específicas do cavalo
   def purge_images
+    return unless params[:deleted_images].present?
     params[:deleted_images].each do |image_url|
       image = @horse.images.find { |img| url_for(img) == image_url }
       image.purge if image
@@ -109,21 +133,20 @@ class Api::V1::HorsesController < ApplicationController
 
   # Função para anexar novos vídeos, evitando duplicações
   def attach_videos(new_videos)
-    new_videos.each do |video|
-      # Criando blobs para enviar ao Cloudinary
-      blob = ActiveStorage::Blob.create_after_upload!(
-        io: video.tempfile,
-        filename: video.original_filename,
-        content_type: video.content_type,
-        service_name: 'cloudinary',
-        key: "HorsesInPocket/Videos/#{SecureRandom.hex}/#{video.original_filename}"
-      )
+    existing_filenames = @horse.videos.map { |video| video.filename.to_s }
 
-      # Associando o blob ao vídeo
-      @horse.videos.attach(blob)
+    new_videos.each do |video|
+      unless existing_filenames.include?(video.original_filename)
+        blob = ActiveStorage::Blob.create_and_upload!(
+          io: video.tempfile,
+          filename: video.original_filename,
+          content_type: video.content_type
+        )
+
+        @horse.videos.attach(blob)
+      end
     end
   end
-
 
   # Encontra o cavalo baseado no ID
   def set_horse

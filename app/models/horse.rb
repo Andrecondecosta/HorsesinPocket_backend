@@ -4,7 +4,7 @@ class Horse < ApplicationRecord
   has_many_attached :videos
   has_many :ancestors, dependent: :destroy
 
-  accepts_nested_attributes_for :ancestors
+  accepts_nested_attributes_for :ancestors, allow_destroy: true
 
   validates :name, :age, :height_cm, :gender, :color, presence: true
   validates :gender, inclusion: { in: ['gelding', 'mare', 'stallion'], message: "%{value} is not a valid gender" }
