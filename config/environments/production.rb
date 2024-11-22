@@ -89,5 +89,5 @@ Rails.application.configure do
   # Skip DNS rebinding protection for the default health check endpoint.
   # config.host_authorization = { exc
   config.hosts << "horsesinpocket-backend-2.onrender.com"
-  config.hosts << "horsesinpocket-frontend.onrender.com"
+  config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end
