@@ -310,7 +310,7 @@ DEPENDENCIES
   dotenv-rails
   error_highlight (>= 0.4.0)
   jwt
-  pg
+  pg (>= 0.18, < 2.0)
   puma (>= 5.0)
   rack-cors
   rails (~> 7.1.3, >= 7.1.3.4)

@@ -11,15 +11,15 @@ gem "sqlite3", "~> 1.4"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 # Gemfile
-gem 'pg'
-
+gem 'pg', '>= 0.18', '< 2.0'
+gem 'rack-cors', require: 'rack/cors'
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 # gem "jbuilder"
 gem 'devise'
 gem 'jwt'
 gem 'cloudinary'
 gem 'activestorage-cloudinary-service'
-gem 'dotenv-rails', groups: [:development, :test]
+gem 'dotenv-rails'
 gem 'carrierwave'
 gem 'ruby-vips', '~> 2.0'
 
