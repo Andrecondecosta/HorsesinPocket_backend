@@ -5,11 +5,11 @@
 
 # Read more: https://github.com/cyu/rack-cors
 
-  Rails.application.config.middleware.insert_before 0, Rack::Cors do
-    allow do
-      'http://localhost:3000', 'https://horsesinpocket-frontend.onrender.com'
-      resource "*",
-        headers: :any,
-        methods: [:get, :post, :put, :patch, :delete, :options, :head]
-    end
+Rails.application.config.middleware.insert_before 0, Rack::Cors do
+  allow do
+    origins 'http://localhost:3000', 'https://horsesinpocket-frontend.onrender.com'
+    resource "*",
+      headers: :any,
+      methods: [:get, :post, :put, :patch, :delete, :options, :head]
   end
+end
