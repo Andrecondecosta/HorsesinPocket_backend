@@ -14,21 +14,22 @@ Rails.application.configure do
 
   # Full error reports are disabled and caching is turned on.
   config.consider_all_requests_local = false
-
+  config.action_controller.perform_caching = true
   # Ensures that a master key has been made available in ENV["RAILS_MASTER_KEY"], config/master.key, or an environment
   # key such as config/credentials/production.key. This key is used to decrypt credentials (and other encrypted files).
   # config.require_master_key = true
 
   # Disable serving static files from `public/`, relying on NGINX/Apache to do so instead.
-  # config.public_file_server.enabled = false
+  config.public_file_server.enabled = ENV['RAILS_SERVE_STATIC_FILES'].present?
 
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
   # config.asset_host = "http://assets.example.com"
-
+  config.assets.js_compressor = :uglifier
+  config.assets.css_compressor = :sass
   # Specifies the header that your server uses for sending files.
   # config.action_dispatch.x_sendfile_header = "X-Sendfile" # for Apache
   # config.action_dispatch.x_sendfile_header = "X-Accel-Redirect" # for NGINX
-
+  config.assets.compile = false
   # Store uploaded files on the local file system (see config/storage.yml for options).
   config.active_storage.service = :cloudinary
 
@@ -86,5 +87,6 @@ Rails.application.configure do
   #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
   # ]
   # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  # config.host_authorization = { exc
+  config.hosts << "horsesinpocket-backend-2.onrender.com"
 end
