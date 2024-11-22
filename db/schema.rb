@@ -11,6 +11,9 @@
 # It's strongly recommended that you check this file into your version control system.
 
 ActiveRecord::Schema[7.1].define(version: 2024_11_12_193141) do
+  # These are extensions that must be enabled in order to support this database
+  enable_extension "plpgsql"
+
   create_table "active_storage_attachments", force: :cascade do |t|
     t.string "name", null: false
     t.string "record_type", null: false
@@ -40,7 +43,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_11_12_193141) do
   end
 
   create_table "ancestors", force: :cascade do |t|
-    t.integer "horse_id", null: false
+    t.bigint "horse_id", null: false
     t.string "name"
     t.string "breed"
     t.string "breeder"
@@ -55,7 +58,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_11_12_193141) do
     t.string "name"
     t.integer "age"
     t.text "description"
-    t.integer "user_id", null: false
+    t.bigint "user_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.decimal "height_cm", precision: 4, scale: 2
@@ -67,7 +70,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_11_12_193141) do
   end
 
   create_table "photos", force: :cascade do |t|
-    t.integer "horse_id", null: false
+    t.bigint "horse_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["horse_id"], name: "index_photos_on_horse_id"
@@ -92,14 +95,14 @@ ActiveRecord::Schema[7.1].define(version: 2024_11_12_193141) do
   end
 
   create_table "videos", force: :cascade do |t|
-    t.integer "horse_id", null: false
+    t.bigint "horse_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["horse_id"], name: "index_videos_on_horse_id"
   end
 
   create_table "xrays", force: :cascade do |t|
-    t.integer "horse_id", null: false
+    t.bigint "horse_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["horse_id"], name: "index_xrays_on_horse_id"
