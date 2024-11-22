@@ -19,7 +19,7 @@ gem 'devise'
 gem 'jwt'
 gem 'cloudinary'
 gem 'activestorage-cloudinary-service'
-gem 'dotenv-rails'
+gem 'dotenv-rails', groups: [:development, :test]
 gem 'carrierwave'
 gem 'ruby-vips', '~> 2.0'
 

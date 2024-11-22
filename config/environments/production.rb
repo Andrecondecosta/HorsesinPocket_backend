@@ -47,8 +47,8 @@ Rails.application.configure do
 
   # Log to STDOUT by default
   config.logger = ActiveSupport::Logger.new(STDOUT)
-    .tap  { |logger| logger.formatter = ::Logger::Formatter.new }
-    .then { |logger| ActiveSupport::TaggedLogging.new(logger) }
+  .tap  { |logger| logger.formatter = ::Logger::Formatter.new }
+  .then { |logger| ActiveSupport::TaggedLogging.new(logger) }
 
   # Prepend all log lines with the following tags.
   config.log_tags = [ :request_id ]
@@ -82,12 +82,12 @@ Rails.application.configure do
   config.active_record.dump_schema_after_migration = false
 
   # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exc
   config.hosts << "horsesinpocket-backend-2.onrender.com"
-  config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  # config.hosts = [
+    #   "example.com",     # Allow requests from example.com
+    #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
+    # ]
+    # Skip DNS rebinding protection for the default health check endpoint.
+    config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  # config.host_authorization = { exc
 end
