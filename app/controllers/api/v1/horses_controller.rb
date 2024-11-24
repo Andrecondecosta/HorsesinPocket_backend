@@ -1,5 +1,5 @@
 class Api::V1::HorsesController < ApplicationController
-  before_action :set_horse, only: [:show, :update, :destroy]
+  before_action :set_horse, only: [:show, :update, :destroy, :share]
 
   # Lista todos os cavalos do usuário autenticado
   def index
@@ -102,6 +102,18 @@ class Api::V1::HorsesController < ApplicationController
     @horse.destroy
     head :no_content
   end
+
+    # Compartilha um cavalo com outro usuário
+    def share
+      recipient = User.find_by(email: params[:email])
+      if recipient
+        @horse.update(user: recipient)
+        render json: { message: 'Cavalo compartilhado com sucesso' }, status: :ok
+      else
+        render json: { error: 'Usuário não encontrado' }, status: :not_found
+      end
+    end
+
 
   private
 
