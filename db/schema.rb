@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_11_12_193141) do
+ActiveRecord::Schema[7.1].define(version: 2024_11_26_190720) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -69,11 +69,28 @@ ActiveRecord::Schema[7.1].define(version: 2024_11_12_193141) do
     t.index ["user_id"], name: "index_horses_on_user_id"
   end
 
+  create_table "horses_users", id: false, force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "horse_id", null: false
+    t.index ["horse_id"], name: "index_horses_users_on_horse_id"
+    t.index ["user_id"], name: "index_horses_users_on_user_id"
+  end
+
   create_table "photos", force: :cascade do |t|
     t.bigint "horse_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["horse_id"], name: "index_photos_on_horse_id"
+  end
+
+  create_table "user_horses", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "horse_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.integer "shared_by"
+    t.index ["horse_id"], name: "index_user_horses_on_horse_id"
+    t.index ["user_id"], name: "index_user_horses_on_user_id"
   end
 
   create_table "users", force: :cascade do |t|
@@ -112,7 +129,12 @@ ActiveRecord::Schema[7.1].define(version: 2024_11_12_193141) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "ancestors", "horses"
   add_foreign_key "horses", "users"
+  add_foreign_key "horses_users", "horses"
+  add_foreign_key "horses_users", "users"
   add_foreign_key "photos", "horses"
+  add_foreign_key "user_horses", "horses"
+  add_foreign_key "user_horses", "users"
+  add_foreign_key "user_horses", "users", column: "shared_by"
   add_foreign_key "videos", "horses"
   add_foreign_key "xrays", "horses"
 end

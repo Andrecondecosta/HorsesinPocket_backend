@@ -25,6 +25,7 @@ class Api::V1::HorsesController < ApplicationController
   # Cria um novo cavalo
   def create
     @horse = current_user.horses.build(horse_params)
+    @horse.user_id = current_user.id
 
     if @horse.save
       # Processa ancestrais apenas se `ancestors_attributes` for um array
@@ -92,27 +93,76 @@ class Api::V1::HorsesController < ApplicationController
     end
   end
 
-
-
-
   # Deleta um cavalo
   def destroy
-    @horse.images.purge if @horse.images.attached?
-    @horse.videos.purge if @horse.videos.attached?
-    @horse.destroy
-    head :no_content
+    if @horse.user_id == current_user.id
+      # Criador apaga o cavalo: remove para todos
+      ActiveRecord::Base.transaction do
+        @horse.destroy
+      end
+      render json: { message: 'Cavalo deletado para todos, pois você é o criador.' }, status: :ok
+    else
+      # Remover o vínculo do usuário atual e de todos subsequentes
+      shared_users = User.joins(:user_horses)
+                         .where(user_horses: { horse_id: @horse.id, shared_by: current_user.id })
+
+      # Remove o vínculo do usuário atual
+      UserHorse.where(horse_id: @horse.id, user_id: current_user.id).destroy_all
+
+      # Propagar exclusão para todos subsequentes
+      shared_users.each do |user|
+        UserHorse.where(horse_id: @horse.id, user_id: user.id).destroy_all
+      end
+
+      render json: { message: 'Cavalo removido da sua lista e dos usuários subsequentes.' }, status: :ok
+    end
   end
 
-    # Compartilha um cavalo com outro usuário
-    def share
-      recipient = User.find_by(email: params[:email])
-      if recipient
-        @horse.update(user: recipient)
-        render json: { message: 'Cavalo compartilhado com sucesso' }, status: :ok
-      else
-        render json: { error: 'Usuário não encontrado' }, status: :not_found
-      end
+
+  # Compartilha um cavalo com outro usuário
+ # app/controllers/api/v1/horses_controller.rb
+ def share
+  recipient = User.find_by(email: params[:email])
+
+  if recipient
+    if @horse.users.include?(recipient)
+      render json: { error: 'O cavalo já foi compartilhado com este usuário.' }, status: :unprocessable_entity
+    else
+      # Criar relação no UserHorse com o campo `shared_by`
+      UserHorse.create!(horse: @horse, user: recipient, shared_by: current_user.id)
+
+      render json: { message: 'Cavalo compartilhado com sucesso.' }, status: :ok
     end
+  else
+    render json: { error: 'Usuário não encontrado.' }, status: :not_found
+  end
+end
+
+
+def received_horses
+  @received_horses = Horse.joins(:user_horses)
+                          .where(user_horses: { user_id: current_user.id })
+
+  render json: @received_horses.map { |horse|
+    # Encontra o último remetente, excluindo o usuário atual
+    sender = User.joins(:user_horses)
+                 .where(user_horses: { horse_id: horse.id })
+                 .where.not(id: current_user.id)
+                 .order('user_horses.created_at DESC')
+                 .first
+
+    # Prioriza o remetente e, caso não exista, exibe o nome do criador
+    horse.as_json.merge({
+      images: horse.images.map { |image| url_for(image) },
+      sender_name: sender&.name || horse.creator&.name || 'Desconhecido'
+    })
+  }
+end
+
+
+
+
+
 
 
   private
@@ -162,7 +212,14 @@ class Api::V1::HorsesController < ApplicationController
 
   # Encontra o cavalo baseado no ID
   def set_horse
-    @horse = current_user.horses.find(params[:id])
+    @horse = Horse
+            .left_joins(:user_horses)
+            .where('(horses.user_id = :user_id OR user_horses.user_id = :user_id)', user_id: current_user.id)
+            .find_by(id: params[:id])
+
+    unless @horse
+      render json: { error: "Cavalo não encontrado ou você não tem permissão para acessá-lo." }, status: :not_found
+    end
   end
 
   # Permite os parâmetros permitidos para criação e atualização de cavalo

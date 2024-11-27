@@ -3,6 +3,7 @@ Rails.application.routes.draw do
     namespace :v1 do
       resources :horses do
         post :share, on: :member
+        get :received, on: :collection
         resources :ancestors, only: [:index, :create, :update, :destroy]
         # Rotas aninhadas para as mídias
         resources :photos, only: [:create, :destroy]
@@ -14,7 +15,9 @@ Rails.application.routes.draw do
       post '/signup', to: 'registrations#create'
       get '/profile', to: 'registrations#show'
       put '/update', to: 'registrations#update'
+      get '/received', to: 'horses#received_horses'
       get 'home/index'
+
     end
   end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
