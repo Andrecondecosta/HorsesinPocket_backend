@@ -1,7 +1,11 @@
 default: &default
   adapter: postgresql
   encoding: unicode
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  pool: 5
+  username: postgres
+  password: 2344 # Sua senha atual para o usuário postgres
+  host: 127.0.0.1
+  port: 5432
 
 development:
   <<: *default
@@ -10,6 +14,7 @@ development:
 test:
   <<: *default
   database: horsesinpocket_test
+
 
 production:
   <<: *default
