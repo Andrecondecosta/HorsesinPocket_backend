@@ -1,13 +1,13 @@
-<h1><%= @sender.name %> convida você para conhecer o cavalo <%= @horse.name %>!</h1>
+<p>Olá,</p>
+<p>Você foi convidado a visualizar o cavalo chamado <strong><%= @horse.name %></strong>.</p>
+
+<% if @horse.images.any? %>
+  <p>Veja abaixo uma imagem do cavalo:</p>
+  <img src="<%= @horse.images.first.url %>" alt="<%= @horse.name %>" style="width: 300px; height: auto;">
+<% else %>
+  <p>Este cavalo não possui imagens disponíveis no momento.</p>
+<% end %>
+
 <p>
-  <strong>Descrição:</strong> <%= @horse.description %>
-</p>
-<p>
-  <img src="<%= url_for(@horse.image) %>" alt="<%= @horse.name %>" width="400">
-</p>
-<p>
-  Registre-se para acessar este cavalo e outros recursos:
-</p>
-<p>
-  <a href="<%= @register_url %>">Registrar-se</a>
+  Clique <a href="<%= invite_url(@horse) %>">aqui</a> para visualizar mais detalhes.
 </p>
