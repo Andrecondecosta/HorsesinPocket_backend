@@ -1,0 +1,13 @@
+<h1><%= @sender.name %> convida você para conhecer o cavalo <%= @horse.name %>!</h1>
+<p>
+  <strong>Descrição:</strong> <%= @horse.description %>
+</p>
+<p>
+  <img src="<%= url_for(@horse.image) %>" alt="<%= @horse.name %>" width="400">
+</p>
+<p>
+  Registre-se para acessar este cavalo e outros recursos:
+</p>
+<p>
+  <a href="<%= @register_url %>">Registrar-se</a>
+</p>

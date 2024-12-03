@@ -121,22 +121,27 @@ class Api::V1::HorsesController < ApplicationController
 
   # Compartilha um cavalo com outro usuário
  # app/controllers/api/v1/horses_controller.rb
- def share
-  recipient = User.find_by(email: params[:email])
 
-  if recipient
-    if @horse.users.include?(recipient)
-      render json: { error: 'O cavalo já foi compartilhado com este usuário.' }, status: :unprocessable_entity
+  # Compartilhar cavalo com outro usuário
+  def share
+    recipient = User.find_by(email: params[:email])
+
+    if recipient.nil?
+      # Enviar convite para novo usuário
+      UserMailer.invite_new_user(current_user, params[:email], @horse).deliver_later
+      render json: { message: "Convite enviado para #{params[:email]}!" }, status: :ok
     else
-      # Criar relação no UserHorse com o campo `shared_by`
-      UserHorse.create!(horse: @horse, user: recipient, shared_by: current_user.id)
-
-      render json: { message: 'Cavalo compartilhado com sucesso.' }, status: :ok
+      # Compartilhar com usuário existente
+      if @horse.users.include?(recipient)
+        render json: { error: 'Cavalo já compartilhado com este usuário' }, status: :unprocessable_entity
+      else
+        @horse.users << recipient
+        UserMailer.share_horse_email(current_user, recipient.email, @horse).deliver_later
+        render json: { message: "Cavalo compartilhado com sucesso com #{recipient.email}!" }, status: :ok
+      end
     end
-  else
-    render json: { error: 'Usuário não encontrado.' }, status: :not_found
   end
-end
+
 
 
 def received_horses
@@ -144,23 +149,28 @@ def received_horses
                           .where(user_horses: { user_id: current_user.id })
 
   render json: @received_horses.map { |horse|
-    # Encontra o último remetente, excluindo o usuário atual
-    sender = User.joins(:user_horses)
-                 .where(user_horses: { horse_id: horse.id })
-                 .where.not(id: current_user.id)
-                 .order('user_horses.created_at DESC')
-                 .first
+    # Encontra a última transferência para o usuário atual
+    last_transfer_to_current_user = UserHorse.where(horse_id: horse.id, user_id: current_user.id)
+                                             .order(created_at: :desc)
+                                             .first
+
+    # Encontra o remetente da última transferência para o usuário atual
+    sender = if last_transfer_to_current_user
+               UserHorse.where(horse_id: horse.id)
+                        .where('created_at < ?', last_transfer_to_current_user.created_at)
+                        .order(created_at: :desc)
+                        .first
+             end
+
+    sender_user = sender ? User.find(sender.user_id) : nil
 
     # Prioriza o remetente e, caso não exista, exibe o nome do criador
     horse.as_json.merge({
       images: horse.images.map { |image| url_for(image) },
-      sender_name: sender&.name || horse.creator&.name || 'Desconhecido'
+      sender_name: sender_user&.name || horse.creator&.name || 'Desconhecido'
     })
   }
 end
-
-
-
 
 
 

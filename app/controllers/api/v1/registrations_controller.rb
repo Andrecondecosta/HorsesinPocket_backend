@@ -10,6 +10,7 @@ class Api::V1::RegistrationsController < ApplicationController
     user = User.new(user_params)
 
     if user.save
+      UserMailer.confirmation_email(user).deliver_later
       token = encode_token({ user_id: user.id })
       render json: { token: token, message: 'Usuário criado com sucesso!' }, status: :created
     else
