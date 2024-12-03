@@ -1,5 +1,12 @@
 <p>Olá,</p>
-<p>Você foi convidado a visualizar o cavalo chamado <strong><%= @horse.name %></strong>.</p>
+
+<p>Você foi convidado a visualizar informações sobre o cavalo <strong><%= @horse.name %></strong>.</p>
+
+<p>Detalhes do Cavalo:</p>
+<ul>
+  <li><strong>Nome:</strong> <%= @horse.name %></li>
+  <li><strong>Descrição:</strong> <%= @horse.description %></li>
+</ul>
 
 <% if @horse.images.any? %>
   <p>Veja abaixo uma imagem do cavalo:</p>
@@ -8,6 +15,4 @@
   <p>Este cavalo não possui imagens disponíveis no momento.</p>
 <% end %>
 
-<p>
-  Clique <a href="<%= invite_url(@horse) %>">aqui</a> para visualizar mais detalhes.
-</p>
+<p>Entre na aplicação para saber mais detalhes.</p>
