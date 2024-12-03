@@ -16,12 +16,12 @@ test:
   database: horsesinpocket_test
 
 production:
-production:
   adapter: postgresql
   encoding: unicode
   pool: 5
   database: horsesinpocket_production
   username: <%= ENV['DATABASE_USER'] %>
   password: <%= ENV['DATABASE_PASSWORD'] %>
-  port: 5432
-  sslmode: require
+  host: <%= ENV['DATABASE_HOST'] || '127.0.0.1' %>
+  port: <%= ENV['DATABASE_PORT'] || 5432 %>
+  sslmode: <%= ENV['DATABASE_SSLMODE'] || 'disable' %>
