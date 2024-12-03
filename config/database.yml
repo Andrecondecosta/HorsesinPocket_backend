@@ -3,7 +3,7 @@ default: &default
   encoding: unicode
   pool: 5
   username: postgres
-  password: 2344 # Sua senha atual para o usuário postgres
+  password: 2344 # Atualize se necessário
   host: 127.0.0.1
   port: 5432
 
@@ -15,13 +15,6 @@ test:
   <<: *default
   database: horsesinpocket_test
 
-
 production:
   <<: *default
-  database: <%= ENV['DATABASE_NAME'] %>
-  database_URL: <%= ENV['DATABASE_URL'] %>
-  username: <%= ENV['DATABASE_USER'] %>
-  password: <%= ENV['DATABASE_PASSWORD'] %>
-  host: <%= ENV['DATABASE_HOST'] %>
-  port: <%= ENV['DATABASE_PORT'] %>
-  sslmode: <%= ENV['DATABASE_SSLMODE'] %>
+  url: <%= ENV['DATABASE_URL'] %> # Use DATABASE_URL para simplificar a configuração
