@@ -12,7 +12,7 @@ gem "sqlite3", "~> 1.4"
 gem "puma", ">= 5.0"
 # Gemfile
 gem 'pg', '>= 0.18', '< 2.0'
-
+gem 'rack-cors', require: 'rack/cors'
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 # gem "jbuilder"
 gem 'devise'
@@ -36,18 +36,14 @@ gem 'ruby-vips', '~> 2.0'
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ mswin mswin64 mingw x64_mingw jruby ]
 
-
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
 
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
 # gem "image_processing", "~> 1.2"
 gem 'rails_12factor', group: :production
-gem 'uglifier', '>= 1.3.0'
+gem 'uglifier'
 gem 'sassc-rails'
-
-
-
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin Ajax possible
 gem "rack-cors"
 
@@ -61,6 +57,7 @@ end
 group :development do
   # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
   # gem "spring"
+
 
   gem "error_highlight", ">= 0.4.0", platforms: [:ruby]
 end
