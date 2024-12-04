@@ -5,7 +5,7 @@ class UserMailer < ApplicationMailer
   def share_horse_email(sender, recipient_email, horse)
     @sender = sender
     @horse = horse
-    @horse_url = "http://localhost:3000/horses/#{horse.id}"
+    @horse_url = "#{ENV['REACT_APP_API_SERVER_URL']}/horses/#{horse.id}"
     mail(to: recipient_email, subject: "#{@sender.name} compartilhou um cavalo com você!")
   end
 
@@ -13,7 +13,12 @@ class UserMailer < ApplicationMailer
   def invite_new_user(sender, recipient_email, horse)
     @sender = sender
     @horse = horse
-    @register_url = "http://localhost:3000/signup"
+    @register_url = "#{ENV['REACT_APP_API_SERVER_URL']}/signup"
     mail(to: recipient_email, subject: "#{@sender.name} convida você para conhecer #{horse.name}")
+  end
+
+  def confirmation_email(user)
+    @user = user
+    mail(to: @user.email, subject: 'Confirmação de Cadastro')
   end
 end
