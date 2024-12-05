@@ -84,19 +84,16 @@ Rails.application.configure do
   config.active_job.queue_adapter = :async
   # Enable DNS rebinding protection and other `Host` header attacks.
   config.hosts << "horsesinpocket-backend-2.onrender.com"
-  # config.hosts = [
-    #   "example.com",     # Allow requests from example.com
-    #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-    # ]
-    config.action_mailer.raise_delivery_errors = true
+
+  config.action_mailer.raise_delivery_errors = true
     # Skip DNS rebinding protection for the default health check endpoint.
-    config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
-  # config.host_authorization = { exc
+  config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+
   config.action_mailer.delivery_method = :smtp
   config.action_mailer.smtp_settings = {
     address: 'smtp.gmail.com',
     port: 587,
-    domain: 'horsesinpocket-backend-2.onrender.com',
+    domain: 'gmail.com',
     user_name: ENV['EMAIL_USER'],
     password: ENV['EMAIL_PASSWORD'],
     authentication: 'plain',
