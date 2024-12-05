@@ -130,7 +130,7 @@ class Api::V1::HorsesController < ApplicationController
 
     if recipient.nil?
       # Enviar convite para novo usuário
-      UserMailer.invite_new_user(current_user, params[:email], @horse).deliver_later
+      UserMailer.invite_new_user(current_user, params[:email], @horse).deliver_now
       render json: { message: "Convite enviado para #{params[:email]}!" }, status: :ok
     else
       # Compartilhar com usuário existente
