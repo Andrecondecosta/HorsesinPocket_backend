@@ -10,7 +10,9 @@ class Api::V1::HorsesController < ApplicationController
         videos: horse.videos.map { |video| url_for(video) },
         ancestors: horse.ancestors
       })
-    }
+    }, status: :ok
+  rescue => e
+    render json: { error: e.message }, status: :internal_server_error
   end
 
   # Exibe um cavalo específico e suas mídias

@@ -94,14 +94,19 @@ Rails.application.configure do
   # config.host_authorization = { exc
   config.action_mailer.delivery_method = :smtp
   config.action_mailer.smtp_settings = {
-    address: 'smtp.gmail.com',
+    address: "smtp.gmail.com",
     port: 587,
-    domain: 'gmail.com',
-    user_name: ENV['EMAIL_USER'], # Certifique-se que esta variável está configurada
-    password: ENV['EMAIL_PASSWORD'], # Certifique-se que esta variável está configurada
-    authentication: 'plain',
-    enable_starttls_auto: true
+    domain: ENV["APP_HOST"],
+    authentication: "plain",
+    enable_starttls_auto: true,
+    user_name: ENV["EMAIL_USER"],
+    password: ENV["EMAIL_PASSWORD"],
+    open_timeout: 5,
+    read_timeout: 5
   }
+  config.action_mailer.logger = Rails.logger
+  config.action_mailer.log_level = :debug
+
 
   config.action_mailer.default_url_options = { host: ENV['APP_HOST'], protocol: 'https' }
 
