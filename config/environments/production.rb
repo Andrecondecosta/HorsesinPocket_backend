@@ -14,7 +14,6 @@ Rails.application.configure do
 
   # Full error reports are disabled and caching is turned on.
   config.consider_all_requests_local = false
-  config.action_controller.perform_caching = true
   # Ensures that a master key has been made available in ENV["RAILS_MASTER_KEY"], config/master.key, or an environment
   # key such as config/credentials/production.key. This key is used to decrypt credentials (and other encrypted files).
   # config.require_master_key = true
@@ -89,6 +88,7 @@ Rails.application.configure do
     #   "example.com",     # Allow requests from example.com
     #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
     # ]
+    config.action_mailer.raise_delivery_errors = true
     # Skip DNS rebinding protection for the default health check endpoint.
     config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
   # config.host_authorization = { exc
@@ -104,9 +104,6 @@ Rails.application.configure do
     open_timeout: 5,
     read_timeout: 5
   }
-  config.action_mailer.logger = Rails.logger
-  config.action_mailer.log_level = :debug
-
 
   config.action_mailer.default_url_options = { host: ENV['APP_HOST'], protocol: 'https' }
 
