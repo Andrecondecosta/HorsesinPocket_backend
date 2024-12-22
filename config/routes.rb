@@ -11,6 +11,8 @@ Rails.application.routes.draw do
         resources :xrays, only: [:create, :destroy]
 
       end
+
+      resources :logs, only: [:index]
       post '/login', to: 'sessions#create'
       post '/signup', to: 'registrations#create'
       get '/profile', to: 'registrations#show'

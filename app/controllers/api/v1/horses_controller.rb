@@ -27,23 +27,9 @@ class Api::V1::HorsesController < ApplicationController
   # Cria um novo cavalo
   def create
     @horse = current_user.horses.build(horse_params)
-    @horse.user_id = current_user.id
-
     if @horse.save
-      # Processa ancestrais apenas se `ancestors_attributes` for um array
-      if params[:horse][:ancestors_attributes].is_a?(Array)
-        params[:horse][:ancestors_attributes].each do |ancestor_params|
-          # Ignora se `ancestor_params` estiver ausente ou incompleto
-          next unless ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
-
-          @horse.ancestors.create!(
-            relation_type: ancestor_params[:relation_type],
-            name: ancestor_params[:name],
-            breeder: ancestor_params[:breeder],
-            breed: ancestor_params[:breed]
-          )
-        end
-      end
+      create_log(action: 'created', horse_name: @horse.name)
+      process_ancestors(@horse, params[:horse][:ancestors_attributes])
 
       render json: @horse.as_json.merge({
         images: @horse.images.map { |image| url_for(image) },
@@ -55,30 +41,10 @@ class Api::V1::HorsesController < ApplicationController
     end
   end
 
-  # Atualiza um cavalo existente
   def update
     ActiveRecord::Base.transaction do
       if @horse.update(horse_params.except(:ancestors_attributes))
-        # Atualiza ou cria ancestrais
-        if params[:horse][:ancestors_attributes].present?
-          # Processar ancestrais enviados
-          sent_relation_types = params[:horse][:ancestors_attributes].map { |a| a[:relation_type] }
-
-          # Atualizar ou criar ancestrais
-          params[:horse][:ancestors_attributes].each do |ancestor_params|
-            ancestor = @horse.ancestors.find_or_initialize_by(relation_type: ancestor_params[:relation_type])
-            ancestor.update!(
-              name: ancestor_params[:name],
-              breeder: ancestor_params[:breeder],
-              breed: ancestor_params[:breed]
-            )
-          end
-
-          # Excluir ancestrais que não estão nos parâmetros enviados
-          @horse.ancestors.where.not(relation_type: sent_relation_types).destroy_all
-        end
-
-        # Atualizar anexos, se necessário
+        process_ancestors(@horse, params[:horse][:ancestors_attributes])
         purge_images if params[:deleted_images].present?
         purge_videos if params[:deleted_videos].present?
         attach_images(params[:horse][:images]) if params[:horse][:images].present?
@@ -94,6 +60,7 @@ class Api::V1::HorsesController < ApplicationController
       end
     end
   end
+  # Atualiza um cavalo existente
 
   # Deleta um cavalo
   def destroy
@@ -101,6 +68,14 @@ class Api::V1::HorsesController < ApplicationController
       # Criador apaga o cavalo: remove para todos
       ActiveRecord::Base.transaction do
         @horse.destroy
+
+        Log.create(
+        action: 'deleted',
+        horse_name: @horse.name,
+        recipient: 'N/A',
+        user_id: current_user.id,
+        created_at: Time.now
+      )
       end
       render json: { message: 'Cavalo deletado para todos, pois você é o criador.' }, status: :ok
     else
@@ -140,6 +115,24 @@ class Api::V1::HorsesController < ApplicationController
         @horse.users << recipient
         UserMailer.share_horse_email(current_user, recipient.email, @horse).deliver_later
         render json: { message: "Cavalo compartilhado com sucesso com #{recipient.email}!" }, status: :ok
+
+        # Criar log da ação de compartilhamento
+      Log.create(
+        action: 'shared',
+        horse_name: @horse.name,
+        recipient: recipient.email,
+        user_id: current_user.id,
+        created_at: Time.now
+      )
+
+      Log.create(
+        action: 'received',
+        horse_name: @horse.name,
+        recipient: current_user.email,
+        user_id: recipient.id,
+        created_at: Time.now
+      )
+
       end
     end
   end
@@ -241,5 +234,32 @@ end
       :training_level, :piroplasmosis, images: [], videos: [],
       ancestors_attributes: [:relation_type, :name, :breeder, :breed, :_destroy]
     )
+  end
+
+  def create_log(action:, horse_name:, recipient: nil)
+    Log.create(
+      action: action,
+      horse_name: horse_name,
+      recipient: recipient || 'N/A',
+      user_id: current_user.id,
+      created_at: Time.now
+    )
+  end
+
+  def process_ancestors(horse, ancestors_attributes)
+    return unless ancestors_attributes.present?
+
+    sent_relation_types = ancestors_attributes.map { |a| a[:relation_type] }
+
+    ancestors_attributes.each do |ancestor_params|
+      ancestor = horse.ancestors.find_or_initialize_by(relation_type: ancestor_params[:relation_type])
+      ancestor.update!(
+        name: ancestor_params[:name],
+        breeder: ancestor_params[:breeder],
+        breed: ancestor_params[:breed]
+      )
+    end
+
+    horse.ancestors.where.not(relation_type: sent_relation_types).destroy_all
   end
 end

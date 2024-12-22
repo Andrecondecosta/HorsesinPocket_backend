@@ -1,0 +1,15 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  action: MyString
+  horse_name: MyString
+  recipient: MyString
+  user_id: 1
+  created_at: 2024-12-22 15:07:55
+
+two:
+  action: MyString
+  horse_name: MyString
+  recipient: MyString
+  user_id: 1
+  created_at: 2024-12-22 15:07:55
