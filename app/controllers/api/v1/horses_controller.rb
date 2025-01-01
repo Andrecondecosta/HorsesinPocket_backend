@@ -43,12 +43,35 @@ class Api::V1::HorsesController < ApplicationController
 
   def update
     ActiveRecord::Base.transaction do
-      if @horse.update(horse_params.except(:ancestors_attributes))
+      if @horse.update(horse_params.except(:ancestors_attributes, :images, :videos))
+        # Processa os ancestrais, se aplicável
         process_ancestors(@horse, params[:horse][:ancestors_attributes])
+
+        # Purga apenas as imagens e vídeos explicitamente deletados
         purge_images if params[:deleted_images].present?
         purge_videos if params[:deleted_videos].present?
-        attach_images(params[:horse][:images]) if params[:horse][:images].present?
-        attach_videos(params[:horse][:videos]) if params[:horse][:videos].present?
+
+        # Adiciona novas imagens sem ultrapassar o limite
+        if params[:horse][:images].present?
+          total_images = @horse.images.count + params[:horse][:images].size
+          if total_images <= 5
+            attach_images(params[:horse][:images])
+          else
+            render json: { error: "Você pode adicionar no máximo 5 imagens. Atualmente, o cavalo tem #{total_images - params[:horse][:images].size} imagens." }, status: :unprocessable_entity
+            return
+          end
+        end
+
+        # Adiciona novos vídeos sem ultrapassar o limite
+        if params[:horse][:videos].present?
+          total_videos = @horse.videos.count + params[:horse][:videos].size
+          if total_videos <= 3
+            attach_videos(params[:horse][:videos])
+          else
+            render json: { error: "Você pode adicionar no máximo 3 vídeos. Atualmente, o cavalo tem #{total_videos - params[:horse][:videos].size} vídeos." }, status: :unprocessable_entity
+            return
+          end
+        end
 
         render json: @horse.as_json.merge({
           images: @horse.images.map { |img| url_for(img) },
@@ -60,7 +83,8 @@ class Api::V1::HorsesController < ApplicationController
       end
     end
   end
-  # Atualiza um cavalo existente
+
+
 
   # Deleta um cavalo
   def destroy
@@ -175,28 +199,64 @@ end
   # Função que purga imagens específicas do cavalo
   def purge_images
     return unless params[:deleted_images].present?
-    params[:deleted_images].each do |image_url|
-      image = @horse.images.find { |img| url_for(img) == image_url }
-      image.purge if image
-    end
-  end
 
-  # Função que purga vídeos específicos do cavalo
-  def purge_videos
-    params[:deleted_videos].each do |video_url|
-      video = @horse.videos.find { |vid| url_for(vid) == video_url }
-      video.purge if video
-    end
-  end
+    Rails.logger.debug "Imagens para remover: #{params[:deleted_images]}"
 
-  # Função para anexar novas imagens, evitando duplicações
-  def attach_images(new_images)
-    new_images.each do |image|
-      unless @horse.images.map(&:filename).include?(image.original_filename)
-        @horse.images.attach(image)
+    @horse.images.each do |image|
+      Rails.logger.debug "Verificando imagem: #{url_for(image)}"
+      if params[:deleted_images].include?(url_for(image))
+        Rails.logger.debug "Removendo imagem: #{url_for(image)}"
+        image.purge
       end
     end
   end
+
+
+
+
+  # Função que purga vídeos específicos do cavalo
+  def purge_videos
+    return unless params[:deleted_videos].present?
+
+    params[:deleted_videos].each do |video_url|
+      # Procura o vídeo correspondente no ActiveStorage
+      video = @horse.videos.find do |vid|
+        begin
+          url_for(vid) == video_url
+        rescue => e
+          Rails.logger.error "Erro ao verificar vídeo para exclusão: #{e.message}"
+          nil
+        end
+      end
+
+      if video
+        Rails.logger.debug "Removendo vídeo: #{url_for(video)}"
+        video.purge
+      else
+        Rails.logger.debug "Vídeo não encontrado: #{video_url}"
+      end
+    end
+  end
+
+
+
+
+  # Função para anexar novas imagens, evitando duplicações
+  def attach_images(new_images)
+    return unless new_images.present?
+
+    new_images.each do |image|
+      # Verifica se a imagem já está anexada para evitar duplicação
+      unless @horse.images.map(&:filename).include?(image.original_filename)
+        Rails.logger.debug "Anexando imagem: #{image.original_filename}"
+        @horse.images.attach(image)
+      else
+        Rails.logger.debug "Imagem já anexada: #{image.original_filename}"
+      end
+    end
+  end
+
+
 
   # Função para anexar novos vídeos, evitando duplicações
   def attach_videos(new_videos)
@@ -209,11 +269,11 @@ end
           filename: video.original_filename,
           content_type: video.content_type
         )
-
         @horse.videos.attach(blob)
       end
     end
   end
+
 
   # Encontra o cavalo baseado no ID
   def set_horse
