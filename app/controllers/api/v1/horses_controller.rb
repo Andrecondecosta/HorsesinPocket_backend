@@ -3,17 +3,13 @@ class Api::V1::HorsesController < ApplicationController
 
   # Lista todos os cavalos do usuário autenticado
   def index
+    Rails.logger.info "Active Storage Service: #{Rails.application.config.active_storage.service}"
     @horses = current_user.horses.includes(:ancestors, images_attachments: :blob, videos_attachments: :blob)
-    render json: @horses.map { |horse|
-      horse.as_json.merge({
-        images: horse.images.map { |image| url_for(image) },
-        videos: horse.videos.map { |video| url_for(video) },
-        ancestors: horse.ancestors
-      })
-    }, status: :ok
+    render json: @horses.map { |horse| ... }
   rescue => e
     render json: { error: e.message }, status: :internal_server_error
   end
+
 
   # Exibe um cavalo específico e suas mídias
   def show
