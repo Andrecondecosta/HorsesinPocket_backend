@@ -31,7 +31,7 @@ class Api::V1::HorsesController < ApplicationController
       Log.create(
         action: 'created',
         horse_name: @horse.name,
-        recipient: 'N/A',
+        recipient: current_user.name,
         user_id: current_user.id,
         created_at: Time.now
       )
@@ -102,7 +102,7 @@ class Api::V1::HorsesController < ApplicationController
         Log.create(
         action: 'deleted',
         horse_name: @horse.name,
-        recipient: 'N/A',
+        recipient: current_user.name,
         user_id: current_user.id,
         created_at: Time.now
       )
@@ -150,7 +150,7 @@ class Api::V1::HorsesController < ApplicationController
       Log.create(
         action: 'shared',
         horse_name: @horse.name,
-        recipient: recipient.email,
+        recipient: recipient.name,
         user_id: current_user.id,
         created_at: Time.now
       )
@@ -158,7 +158,7 @@ class Api::V1::HorsesController < ApplicationController
       Log.create(
         action: 'received',
         horse_name: @horse.name,
-        recipient: current_user.email,
+        recipient: current_user.name,
         user_id: recipient.id,
         created_at: Time.now
       )
