@@ -27,21 +27,23 @@ class Api::V1::HorsesController < ApplicationController
   # Cria um novo cavalo
   def create
     @horse = current_user.horses.build(horse_params)
-    @horse.user_id = current_user.id
     if @horse.save
-      # Processa ancestrais apenas se `ancestors_attributes` for um array
-      if params[:horse][:ancestors_attributes].is_a?(Array)
-        params[:horse][:ancestors_attributes].each do |ancestor_params|
-          # Ignora se `ancestor_params` estiver ausente ou incompleto
-          next unless ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
-          @horse.ancestors.create!(
-            relation_type: ancestor_params[:relation_type],
-            name: ancestor_params[:name],
-            breeder: ancestor_params[:breeder],
-            breed: ancestor_params[:breed]
-          )
-        end
-      end
+      Log.create(
+        action: 'created',
+        horse_name: @horse.name,
+        recipient: 'N/A',
+        user_id: current_user.id,
+        created_at: Time.now
+      )
+      process_ancestors(@horse, params[:horse][:ancestors_attributes])
+
+      render json: @horse.as_json.merge({
+        images: @horse.images.map { |image| url_for(image) },
+        videos: @horse.videos.map { |video| url_for(video) },
+        ancestors: @horse.ancestors
+      }), status: :created
+    else
+      render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
