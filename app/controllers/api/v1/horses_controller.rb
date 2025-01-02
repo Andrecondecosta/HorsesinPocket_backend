@@ -15,6 +15,7 @@ class Api::V1::HorsesController < ApplicationController
     render json: { error: e.message }, status: :internal_server_error
   end
 
+
   # Exibe um cavalo específico e suas mídias
   def show
     render json: @horse.as_json.merge({
@@ -29,22 +30,19 @@ class Api::V1::HorsesController < ApplicationController
     @horse = current_user.horses.build(horse_params)
     @horse.user_id = current_user.id
     if @horse.save
-      Log.create(
-        action: 'created',
-        horse_name: @horse.name,
-        recipient: current_user.email,
-        user_id: current_user.id,
-        created_at: Time.now
-      )
-      process_ancestors(@horse, params[:horse][:ancestors_attributes])
-
-      render json: @horse.as_json.merge({
-        images: @horse.images.map { |image| url_for(image) },
-        videos: @horse.videos.map { |video| url_for(video) },
-        ancestors: @horse.ancestors
-      }), status: :created
-    else
-      render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
+      # Processa ancestrais apenas se `ancestors_attributes` for um array
+      if params[:horse][:ancestors_attributes].is_a?(Array)
+        params[:horse][:ancestors_attributes].each do |ancestor_params|
+          # Ignora se `ancestor_params` estiver ausente ou incompleto
+          next unless ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
+          @horse.ancestors.create!(
+            relation_type: ancestor_params[:relation_type],
+            name: ancestor_params[:name],
+            breeder: ancestor_params[:breeder],
+            breed: ancestor_params[:breed]
+          )
+        end
+      end
     end
   end
 
