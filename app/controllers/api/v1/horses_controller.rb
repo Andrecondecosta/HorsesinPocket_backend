@@ -3,10 +3,23 @@ class Api::V1::HorsesController < ApplicationController
 
   # Lista todos os cavalos do usuário autenticado
   def index
-    Rails.logger.info "Active Storage Service: #{Rails.application.config.active_storage.service}"
+    Rails.logger.info "Fetching horses for user #{current_user.id}"
     @horses = current_user.horses.includes(:ancestors, images_attachments: :blob, videos_attachments: :blob)
-    render json: @horses.map { |horse| ... }
+
+    @horses.each do |horse|
+      Rails.logger.info "Horse: #{horse.name}, Images: #{horse.images.count}, Videos: #{horse.videos.count}"
+    end
+
+    render json: @horses.map { |horse|
+      {
+        id: horse.id,
+        name: horse.name,
+        images: horse.images.map { |image| Rails.application.routes.url_helpers.url_for(image) },
+        videos: horse.videos.map { |video| Rails.application.routes.url_helpers.url_for(video) }
+      }
+    }, status: :ok
   rescue => e
+    Rails.logger.error "Error in Horses#index: #{e.message}"
     render json: { error: e.message }, status: :internal_server_error
   end
 

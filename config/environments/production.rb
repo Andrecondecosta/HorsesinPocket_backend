@@ -81,6 +81,9 @@ Rails.application.configure do
   config.hosts << "localhost"
   config.hosts << "localhost:3000"
 
+  Rails.application.routes.default_url_options[:host] = ENV['APP_HOST'] || 'horsesinpocket-backend-2.onrender.com'
+  Rails.logger.info "Active Storage service: #{Rails.application.config.active_storage.service}"
+
   # Skip DNS rebinding protection for specific paths.
   config.host_authorization = {
     exclude: ->(request) {
