@@ -10,25 +10,22 @@ class ApplicationController < ActionController::API
   end
 
   def current_user
-    return @current_user if @current_user # Retorna se já foi definido
-    decoded = decoded_token
-    @current_user = User.find_by(id: decoded[0]['user_id']) if decoded
+    if decoded_token
+      user_id = decoded_token[0]['user_id']
+      @user = User.find_by(id: user_id)
+    end
   end
-
 
   def decoded_token
-    return nil unless auth_header
-
-    token = auth_header.split(' ')[1]
-    JWT.decode(token, Rails.application.credentials.secret_key_base, true, algorithm: 'HS256')
-  rescue JWT::ExpiredSignature
-    Rails.logger.warn("JWT Expired Token: #{token}")
-    nil
-  rescue JWT::DecodeError => e
-    Rails.logger.warn("JWT Decode Error: #{e.message}")
-    nil
+    if auth_header
+      token = auth_header.split(' ')[1]
+      begin
+        JWT.decode(token, Rails.application.credentials.secret_key_base, true, algorithm: 'HS256')
+      rescue JWT::DecodeError
+        nil
+      end
+    end
   end
-
 
   def auth_header
     request.headers['Authorization']
@@ -37,7 +34,6 @@ class ApplicationController < ActionController::API
   def encode_token(payload)
     JWT.encode(payload, Rails.application.credentials.secret_key_base)
   end
-
   def frontend_index
     render file: Rails.root.join('public', 'index.html'), layout: false
   end
