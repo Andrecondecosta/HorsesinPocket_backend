@@ -1,5 +1,6 @@
 class Api::V1::HorsesController < ApplicationController
   before_action :set_horse, only: [:show, :update, :destroy, :share]
+  before_action :authorized
 
   # Lista todos os cavalos do usuário autenticado
   def index
