@@ -31,11 +31,7 @@ class ApplicationController < ActionController::API
     request.headers['Authorization']
   end
 
-
   def encode_token(payload)
     JWT.encode(payload, Rails.application.credentials.secret_key_base)
-  end
-  def frontend_index
-    render file: Rails.root.join('public', 'index.html'), layout: false
   end
 end
