@@ -27,11 +27,12 @@ class Api::V1::HorsesController < ApplicationController
   # Cria um novo cavalo
   def create
     @horse = current_user.horses.build(horse_params)
+    @horse.user_id = current_user.id
     if @horse.save
       Log.create(
         action: 'created',
         horse_name: @horse.name,
-        recipient: current_user.name,
+        recipient: current_user.email,
         user_id: current_user.id,
         created_at: Time.now
       )
@@ -102,7 +103,7 @@ class Api::V1::HorsesController < ApplicationController
         Log.create(
         action: 'deleted',
         horse_name: @horse.name,
-        recipient: current_user.name,
+        recipient: 'N/A',
         user_id: current_user.id,
         created_at: Time.now
       )
@@ -150,7 +151,7 @@ class Api::V1::HorsesController < ApplicationController
       Log.create(
         action: 'shared',
         horse_name: @horse.name,
-        recipient: recipient.name,
+        recipient: recipient.email,
         user_id: current_user.id,
         created_at: Time.now
       )
@@ -158,7 +159,7 @@ class Api::V1::HorsesController < ApplicationController
       Log.create(
         action: 'received',
         horse_name: @horse.name,
-        recipient: current_user.name,
+        recipient: current_user.email,
         user_id: recipient.id,
         created_at: Time.now
       )
