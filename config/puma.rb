@@ -10,6 +10,7 @@ port ENV.fetch("PORT") { 3000 }
 
 # Ambiente de execução (development, production, etc.)
 environment ENV.fetch("RAILS_ENV") { "development" }
+worker_timeout 60 if ENV.fetch("RAILS_ENV", "development") == "production"
 
 # Pré-carrega a aplicação antes de forkar os workers
 preload_app!
