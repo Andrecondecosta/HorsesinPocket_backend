@@ -33,33 +33,56 @@ class Api::V1::HorsesController < ApplicationController
     Rails.logger.info("Parâmetros recebidos no método create: #{params.inspect}")
 
     begin
-      # Criação do cavalo
+      # Criação do cavalo associado ao utilizador atual
       @horse = current_user.horses.build(horse_params)
-      Rails.logger.info("Cavalo criado: #{@horse.inspect}")
+      Rails.logger.info("Cavalo criado (não salvo): #{@horse.inspect}")
 
       # Salvar o cavalo
       if @horse.save
         Rails.logger.info("Cavalo salvo com sucesso: #{@horse.id}")
 
-        # Processa imagens
+        # Processa ancestrais
+        if params[:horse][:ancestors_attributes].is_a?(Array)
+          params[:horse][:ancestors_attributes].each do |ancestor_params|
+            if ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
+              Rails.logger.info("Criando ancestral: #{ancestor_params.inspect}")
+              @horse.ancestors.create!(
+                relation_type: ancestor_params[:relation_type],
+                name: ancestor_params[:name],
+                breeder: ancestor_params[:breeder],
+                breed: ancestor_params[:breed]
+              )
+            else
+              Rails.logger.warn("Ancestral ignorado por falta de dados: #{ancestor_params.inspect}")
+            end
+          end
+        else
+          Rails.logger.info("Nenhum ancestral recebido.")
+        end
+
+        # Processa imagens, se existirem
         if params[:horse][:images]
           params[:horse][:images].each do |image|
             Rails.logger.info("Anexando imagem: #{image.original_filename}")
             @horse.images.attach(image)
           end
-          Rails.logger.info("Imagens anexadas com sucesso.")
+          Rails.logger.info("Imagens anexadas: #{@horse.images.count}")
+        else
+          Rails.logger.info("Nenhuma imagem foi recebida.")
         end
 
-        # Processa vídeos
+        # Processa vídeos, se existirem
         if params[:horse][:videos]
           params[:horse][:videos].each do |video|
             Rails.logger.info("Anexando vídeo: #{video.original_filename}")
             @horse.videos.attach(video)
           end
-          Rails.logger.info("Vídeos anexados com sucesso.")
+          Rails.logger.info("Vídeos anexados: #{@horse.videos.count}")
+        else
+          Rails.logger.info("Nenhum vídeo foi recebido.")
         end
 
-        # Resposta de sucesso
+        # Retorna o cavalo criado com as URLs de imagens, vídeos e ancestrais anexados
         render json: @horse.as_json.merge({
           images: @horse.images.map { |image| url_for(image) },
           videos: @horse.videos.map { |video| url_for(video) },
@@ -77,7 +100,6 @@ class Api::V1::HorsesController < ApplicationController
       render json: { error: "Erro interno do servidor." }, status: :internal_server_error
     end
   end
-
 
 
   def update
