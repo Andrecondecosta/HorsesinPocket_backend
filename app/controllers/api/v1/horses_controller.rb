@@ -1,3 +1,5 @@
+require 'open-uri'
+
 class Api::V1::HorsesController < ApplicationController
   before_action :set_horse, only: [:show, :update, :destroy, :share]
   before_action :authorized
