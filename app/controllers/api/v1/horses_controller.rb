@@ -30,6 +30,20 @@ class Api::V1::HorsesController < ApplicationController
 
   # Cria um novo cavalo
 def create
+  Rails.logger.info("Parâmetros recebidos no método create: #{params.inspect}")
+
+  if params[:horse][:images]
+    Rails.logger.info("Imagens recebidas: #{params[:horse][:images].inspect}")
+  else
+    Rails.logger.info("Nenhuma imagem recebida.")
+  end
+
+  if params[:horse][:videos]
+    Rails.logger.info("Vídeos recebidos: #{params[:horse][:videos].inspect}")
+  else
+    Rails.logger.info("Nenhum vídeo recebido.")
+  end
+
   @horse = current_user.horses.build(horse_params)
   @horse.user_id = current_user.id
 
