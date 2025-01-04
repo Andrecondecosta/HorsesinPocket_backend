@@ -14,12 +14,6 @@ class Horse < ApplicationRecord
   validates :training_level, length: { maximum: 100 }
   validates :color, length: { maximum: 20 } # Ajuste do comprimento de cor para aceitar mais valores
   # Métodos auxiliares para acessar ancestrais específicos
-  validates :images, content_type: ['image/png', 'image/jpg', 'image/jpeg'],
-  size: { less_than: 10.megabytes, message: 'Cada imagem deve ter no máximo 10MB' }
-
-  validates :videos, content_type: ['video/mp4', 'video/mpeg', 'video/avi'],
-  size: { less_than: 50.megabytes, message: 'Cada vídeo deve ter no máximo 50MB' }
-
   before_update :prevent_creator_change, if: :user_id_changed?
 
 
