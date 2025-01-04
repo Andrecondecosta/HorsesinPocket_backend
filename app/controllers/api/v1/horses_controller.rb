@@ -1,6 +1,8 @@
 class Api::V1::HorsesController < ApplicationController
   before_action :set_horse, only: [:show, :update, :destroy, :share]
   before_action :authorized
+  validate :validate_images
+  validate :validate_videos
 
   # Lista todos os cavalos do usuário autenticado
   def index
@@ -351,5 +353,28 @@ end
     end
 
     horse.ancestors.where.not(relation_type: sent_relation_types).destroy_all
+  end
+
+
+  def validate_images
+    images.each do |image|
+      unless image.content_type.in?(%w[image/png image/jpg image/jpeg])
+        errors.add(:images, "deve ser PNG, JPG ou JPEG")
+      end
+      unless image.byte_size <= 10.megabytes
+        errors.add(:images, "não pode ter mais de 10MB")
+      end
+    end
+  end
+
+  def validate_videos
+    videos.each do |video|
+      unless video.content_type.in?(%w[video/mp4 video/mpeg video/avi])
+        errors.add(:videos, "deve ser MP4, MPEG ou AVI")
+      end
+      unless video.byte_size <= 50.megabytes
+        errors.add(:videos, "não pode ter mais de 50MB")
+      end
+    end
   end
 end
