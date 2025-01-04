@@ -91,9 +91,10 @@ Rails.application.configure do
 
   # Log to STDOUT
 
-  config.logger = ActiveSupport::Logger.new(Rails.root.join('log', 'production.log'))
-config.logger.formatter = ::Logger::Formatter.new
-config.log_level = :info
-config.log_tags = [:request_id]
+  config.logger = Logger.new(STDOUT)
+  config.logger.formatter = ::Logger::Formatter.new
+  config.log_level = :debug # Para capturar mais detalhes nos logs
+  config.log_tags = [:request_id]
+
 
 end
