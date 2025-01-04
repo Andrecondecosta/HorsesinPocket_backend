@@ -2,6 +2,7 @@ require "active_support/core_ext/integer/time"
 
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
+  config.active_storage.service = :cloudinary
 
   # Code is not reloaded between requests.
   config.enable_reloading = false
@@ -30,14 +31,13 @@ Rails.application.configure do
   config.assets.compile = false
 
   # Store uploaded files on the configured storage service.
-  config.active_storage.service = :cloudinary
 
   # Force all access to the app over SSL and use secure cookies.
   config.force_ssl = ENV['RAILS_FORCE_SSL'] == 'true'
 
   # Use the lowest log level to ensure availability of diagnostic information
   # when problems arise.
-  config.log_level = :info
+  config.log_level = :debug
 
   # Prepend all log lines with the following tags.
   config.log_tags = [:request_id]
@@ -93,8 +93,7 @@ Rails.application.configure do
 
   config.logger = Logger.new(STDOUT)
   config.logger.formatter = ::Logger::Formatter.new
-  config.log_level = :debug # Para capturar mais detalhes nos logs
-  config.log_tags = [:request_id]
+
 
 
 end
