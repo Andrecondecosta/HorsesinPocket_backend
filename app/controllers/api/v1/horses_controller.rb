@@ -31,34 +31,44 @@ class Api::V1::HorsesController < ApplicationController
   # Cria um novo cavalo
   def create
     @horse = current_user.horses.build(horse_params)
+    @horse.user_id = current_user.id
 
-    ActiveRecord::Base.transaction do
-      if @horse.save
-        if params[:horse][:ancestors_attributes]&.is_a?(Array)
-          params[:horse][:ancestors_attributes].each do |ancestor_params|
-            next unless ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
-
-            @horse.ancestors.create!(
-              relation_type: ancestor_params[:relation_type],
-              name: ancestor_params[:name],
-              breeder: ancestor_params[:breeder],
-              breed: ancestor_params[:breed]
-            )
-          end
+    if @horse.save
+      # Processa imagens e vídeos
+      if params[:horse][:images]
+        params[:horse][:images].each do |image|
+          @horse.images.attach(image)
         end
-
-        render json: @horse.as_json.merge({
-          images: @horse.images.any? ? @horse.images.map { |image| url_for(image) } : [],
-          videos: @horse.videos.any? ? @horse.videos.map { |video| url_for(video) } : [],
-          ancestors: @horse.ancestors
-        }), status: :created
-      else
-        raise ActiveRecord::Rollback
-        render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
       end
+
+      if params[:horse][:videos]
+        params[:horse][:videos].each do |video|
+          @horse.videos.attach(video)
+        end
+      end
+
+      # Processa ancestrais
+      if params[:horse][:ancestors_attributes].is_a?(Array)
+        params[:horse][:ancestors_attributes].each do |ancestor_params|
+          next unless ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
+
+          @horse.ancestors.create!(
+            relation_type: ancestor_params[:relation_type],
+            name: ancestor_params[:name],
+            breeder: ancestor_params[:breeder],
+            breed: ancestor_params[:breed]
+          )
+        end
+      end
+
+      render json: @horse.as_json.merge({
+        images: @horse.images.attached? ? @horse.images.map { |image| url_for(image) } : [],
+        videos: @horse.videos.attached? ? @horse.videos.map { |video| url_for(video) } : [],
+        ancestors: @horse.ancestors
+      }), status: :created
+    else
+      render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
     end
-  rescue ActiveRecord::RecordInvalid => e
-    render json: { errors: [e.message] }, status: :unprocessable_entity
   end
 
   def update
