@@ -41,20 +41,34 @@ class Api::V1::HorsesController < ApplicationController
       if @horse.save
         logs << "Cavalo salvo com sucesso: #{@horse.id}"
 
-        # Processa ancestrais, se aplicáveis
         if params[:horse][:ancestors_attributes].is_a?(Array)
           params[:horse][:ancestors_attributes].each do |ancestor_params|
-            if ancestor_params[:relation_type].present? && ancestor_params[:name].present?
-              @horse.ancestors.create!(
-                relation_type: ancestor_params[:relation_type],
-                name: ancestor_params[:name],
-                breeder: ancestor_params[:breeder],
-                breed: ancestor_params[:breed]
-              )
+            if ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
+              # Verifica se já existe um ancestral com o mesmo relation_type
+              existing_ancestor = @horse.ancestors.find_by(relation_type: ancestor_params[:relation_type])
+
+              if existing_ancestor
+                logs << "Já existe um ancestral com relation_type #{ancestor_params[:relation_type]}. Atualizando os dados."
+                existing_ancestor.update(
+                  name: ancestor_params[:name],
+                  breeder: ancestor_params[:breeder],
+                  breed: ancestor_params[:breed]
+                )
+              else
+                logs << "Criando novo ancestral: #{ancestor_params.inspect}"
+                @horse.ancestors.create!(
+                  relation_type: ancestor_params[:relation_type],
+                  name: ancestor_params[:name],
+                  breeder: ancestor_params[:breeder],
+                  breed: ancestor_params[:breed]
+                )
+              end
             else
-              logs << "Ancestral ignorado: Dados incompletos - #{ancestor_params.inspect}"
+              logs << "Ancestral ignorado por falta de dados: #{ancestor_params.inspect}"
             end
           end
+        else
+          logs << "Nenhum ancestral recebido."
         end
 
         # Processa imagens, se existirem
