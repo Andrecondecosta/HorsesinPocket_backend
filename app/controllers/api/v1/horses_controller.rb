@@ -30,38 +30,33 @@ class Api::V1::HorsesController < ApplicationController
 
   # Cria um novo cavalo
   def create
-    # Log dos parâmetros recebidos
     Rails.logger.info("Parâmetros recebidos no método create: #{params.inspect}")
 
     begin
-      # Criação do cavalo associado ao utilizador atual
+      # Criação do cavalo
       @horse = current_user.horses.build(horse_params)
-      Rails.logger.info("Cavalo criado (não salvo): #{@horse.inspect}")
+      Rails.logger.info("Cavalo criado: #{@horse.inspect}")
 
-      # Verificação se o cavalo foi salvo com sucesso
+      # Salvar o cavalo
       if @horse.save
         Rails.logger.info("Cavalo salvo com sucesso: #{@horse.id}")
 
-        # Processa imagens, se existirem
+        # Processa imagens
         if params[:horse][:images]
           params[:horse][:images].each do |image|
             Rails.logger.info("Anexando imagem: #{image.original_filename}")
             @horse.images.attach(image)
           end
-          Rails.logger.info("Imagens anexadas: #{@horse.images.count}")
-        else
-          Rails.logger.info("Nenhuma imagem recebida.")
+          Rails.logger.info("Imagens anexadas com sucesso.")
         end
 
-        # Processa vídeos, se existirem
+        # Processa vídeos
         if params[:horse][:videos]
           params[:horse][:videos].each do |video|
             Rails.logger.info("Anexando vídeo: #{video.original_filename}")
             @horse.videos.attach(video)
           end
-          Rails.logger.info("Vídeos anexados: #{@horse.videos.count}")
-        else
-          Rails.logger.info("Nenhum vídeo recebido.")
+          Rails.logger.info("Vídeos anexados com sucesso.")
         end
 
         # Resposta de sucesso
@@ -70,20 +65,19 @@ class Api::V1::HorsesController < ApplicationController
           videos: @horse.videos.map { |video| url_for(video) },
           ancestors: @horse.ancestors
         }), status: :created
-
       else
-        # Log e resposta em caso de falha ao salvar
         Rails.logger.error("Erro ao salvar cavalo: #{@horse.errors.full_messages}")
         render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
       end
 
     rescue => e
-      # Log do erro em caso de exceção
-      Rails.logger.error("Erro no método create: #{e.message}")
-      Rails.logger.error(e.backtrace.join("\n"))
+      # Captura e loga erros inesperados
+      Rails.logger.error("Erro inesperado no método create: #{e.message}")
+      Rails.logger.error("Backtrace:\n#{e.backtrace.join("\n")}")
       render json: { error: "Erro interno do servidor." }, status: :internal_server_error
     end
   end
+
 
 
   def update
