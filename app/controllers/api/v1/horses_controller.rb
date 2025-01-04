@@ -1,8 +1,6 @@
 class Api::V1::HorsesController < ApplicationController
   before_action :set_horse, only: [:show, :update, :destroy, :share]
   before_action :authorized
-  validate :validate_images
-  validate :validate_videos
 
   # Lista todos os cavalos do usuário autenticado
   def index
@@ -31,47 +29,47 @@ class Api::V1::HorsesController < ApplicationController
   end
 
   # Cria um novo cavalo
-  def create
-    @horse = current_user.horses.build(horse_params)
-    @horse.user_id = current_user.id
+def create
+  @horse = current_user.horses.build(horse_params)
+  @horse.user_id = current_user.id
 
-    if @horse.save
-      # Processa imagens e vídeos
-      if params[:horse][:images]
-        params[:horse][:images].each do |image|
-          @horse.images.attach(image)
-        end
+  if @horse.save
+    # Processa imagens e vídeos
+    if params[:horse][:images]
+      params[:horse][:images].each do |image|
+        @horse.images.attach(image)
       end
-
-      if params[:horse][:videos]
-        params[:horse][:videos].each do |video|
-          @horse.videos.attach(video)
-        end
-      end
-
-      # Processa ancestrais
-      if params[:horse][:ancestors_attributes].is_a?(Array)
-        params[:horse][:ancestors_attributes].each do |ancestor_params|
-          next unless ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
-
-          @horse.ancestors.create!(
-            relation_type: ancestor_params[:relation_type],
-            name: ancestor_params[:name],
-            breeder: ancestor_params[:breeder],
-            breed: ancestor_params[:breed]
-          )
-        end
-      end
-
-      render json: @horse.as_json.merge({
-        images: @horse.images.attached? ? @horse.images.map { |image| url_for(image) } : [],
-        videos: @horse.videos.attached? ? @horse.videos.map { |video| url_for(video) } : [],
-        ancestors: @horse.ancestors
-      }), status: :created
-    else
-      render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
     end
+
+    if params[:horse][:videos]
+      params[:horse][:videos].each do |video|
+        @horse.videos.attach(video)
+      end
+    end
+
+    # Processa ancestrais
+    if params[:horse][:ancestors_attributes].is_a?(Array)
+      params[:horse][:ancestors_attributes].each do |ancestor_params|
+        next unless ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
+
+        @horse.ancestors.create!(
+          relation_type: ancestor_params[:relation_type],
+          name: ancestor_params[:name],
+          breeder: ancestor_params[:breeder],
+          breed: ancestor_params[:breed]
+        )
+      end
+    end
+
+    render json: @horse.as_json.merge({
+      images: @horse.images.attached? ? @horse.images.map { |image| url_for(image) } : [],
+      videos: @horse.videos.attached? ? @horse.videos.map { |video| url_for(video) } : [],
+      ancestors: @horse.ancestors
+    }), status: :created
+  else
+    render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
   end
+end
 
   def update
     ActiveRecord::Base.transaction do
@@ -353,28 +351,5 @@ end
     end
 
     horse.ancestors.where.not(relation_type: sent_relation_types).destroy_all
-  end
-
-
-  def validate_images
-    images.each do |image|
-      unless image.content_type.in?(%w[image/png image/jpg image/jpeg])
-        errors.add(:images, "deve ser PNG, JPG ou JPEG")
-      end
-      unless image.byte_size <= 10.megabytes
-        errors.add(:images, "não pode ter mais de 10MB")
-      end
-    end
-  end
-
-  def validate_videos
-    videos.each do |video|
-      unless video.content_type.in?(%w[video/mp4 video/mpeg video/avi])
-        errors.add(:videos, "deve ser MP4, MPEG ou AVI")
-      end
-      unless video.byte_size <= 50.megabytes
-        errors.add(:videos, "não pode ter mais de 50MB")
-      end
-    end
   end
 end
