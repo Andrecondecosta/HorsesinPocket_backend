@@ -1,21 +1,18 @@
 class Api::V1::HorsesController < ApplicationController
   before_action :set_horse, only: [:show, :update, :destroy, :share]
-  before_action :authorized
 
   # Lista todos os cavalos do usuário autenticado
   def index
-    begin
-      @horses = current_user.horses.includes(:ancestors, images_attachments: :blob, videos_attachments: :blob)
-      render json: @horses.map { |horse|
-        horse.as_json.merge({
-          images: horse.images.map { |image| url_for(image) },
-          videos: horse.videos.map { |video| url_for(video) },
-          ancestors: horse.ancestors
-        })
-      }, status: :ok
-    rescue => e
-      render json: { error: e.message }, status: :internal_server_error
-    end
+    @horses = current_user.horses.includes(:ancestors, images_attachments: :blob, videos_attachments: :blob)
+    render json: @horses.map { |horse|
+      horse.as_json.merge({
+        images: horse.images.map { |image| url_for(image) },
+        videos: horse.videos.map { |video| url_for(video) },
+        ancestors: horse.ancestors
+      })
+    }, status: :ok
+  rescue => e
+    render json: { error: e.message }, status: :internal_server_error
   end
 
   # Exibe um cavalo específico e suas mídias
@@ -29,108 +26,52 @@ class Api::V1::HorsesController < ApplicationController
 
   # Cria um novo cavalo
   def create
-    logs = []
-    begin
-      # Log dos parâmetros recebidos
-      logs << "Parâmetros recebidos: #{params.inspect}"
+    @horse = current_user.horses.build(horse_params)
+    if @horse.save
+      create_log(action: 'created', horse_name: @horse.name)
+      process_ancestors(@horse, params[:horse][:ancestors_attributes])
 
-      # Criação do cavalo associado ao utilizador atual
-      @horse = current_user.horses.build(horse_params)
-      logs << "Cavalo criado (não salvo): #{@horse.inspect}"
-
-      if @horse.save
-        logs << "Cavalo salvo com sucesso: #{@horse.id}"
-
-        if params[:horse][:ancestors_attributes].is_a?(Array)
-          params[:horse][:ancestors_attributes].each do |ancestor_params|
-            if ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
-              # Verifica se já existe um ancestral com o mesmo relation_type
-              existing_ancestor = @horse.ancestors.find_by(relation_type: ancestor_params[:relation_type])
-
-              if existing_ancestor
-                logs << "Já existe um ancestral com relation_type #{ancestor_params[:relation_type]}. Atualizando os dados."
-                existing_ancestor.update(
-                  name: ancestor_params[:name],
-                  breeder: ancestor_params[:breeder],
-                  breed: ancestor_params[:breed]
-                )
-              else
-                logs << "Criando novo ancestral: #{ancestor_params.inspect}"
-                @horse.ancestors.create!(
-                  relation_type: ancestor_params[:relation_type],
-                  name: ancestor_params[:name],
-                  breeder: ancestor_params[:breeder],
-                  breed: ancestor_params[:breed]
-                )
-              end
-            else
-              logs << "Ancestral ignorado por falta de dados: #{ancestor_params.inspect}"
-            end
-          end
-        else
-          logs << "Nenhum ancestral recebido."
-        end
-
-        # Processa imagens, se existirem
-        if params[:horse][:images].present?
-          params[:horse][:images].each do |image|
-            begin
-              logs << "Anexando imagem: #{image.original_filename}"
-              @horse.images.attach(image)
-            rescue => e
-              logs << "Erro ao anexar imagem #{image.original_filename}: #{e.message}"
-            end
-          end
-        else
-          logs << "Nenhuma imagem recebida."
-        end
-
-        # Processa vídeos, se existirem
-        if params[:horse][:videos].present?
-          params[:horse][:videos].each do |video|
-            begin
-              logs << "Anexando vídeo: #{video.original_filename}"
-              @horse.videos.attach(video)
-            rescue => e
-              logs << "Erro ao anexar vídeo #{video.original_filename}: #{e.message}"
-            end
-          end
-        else
-          logs << "Nenhum vídeo recebido."
-        end
-
-        # Retorna o cavalo criado com logs para debug
-        render json: {
-          horse: @horse.as_json.merge({
-            images: @horse.images.map { |image| url_for(image) },
-            videos: @horse.videos.map { |video| url_for(video) },
-            ancestors: @horse.ancestors
-          }),
-          logs: logs
-        }, status: :created
-      else
-        logs << "Erro ao salvar cavalo: #{@horse.errors.full_messages}"
-        render json: { errors: @horse.errors.full_messages, logs: logs }, status: :unprocessable_entity
-      end
-
-    rescue => e
-      # Captura erros inesperados
-      logs << "Erro inesperado: #{e.message}"
-      logs << "Backtrace: #{e.backtrace.take(10).join("\n")}"
-      render json: { error: "Erro interno do servidor.", logs: logs }, status: :internal_server_error
+      render json: @horse.as_json.merge({
+        images: @horse.images.map { |image| url_for(image) },
+        videos: @horse.videos.map { |video| url_for(video) },
+        ancestors: @horse.ancestors
+      }), status: :created
+    else
+      render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
-
-  # Atualiza um cavalo existente
   def update
     ActiveRecord::Base.transaction do
       if @horse.update(horse_params.except(:ancestors_attributes, :images, :videos))
-        process_ancestors(@horse, params[:horse][:ancestors_attributes]) if params[:horse][:ancestors_attributes].present?
+        # Processa os ancestrais, se aplicável
+        process_ancestors(@horse, params[:horse][:ancestors_attributes])
+
+        # Purga apenas as imagens e vídeos explicitamente deletados
         purge_images if params[:deleted_images].present?
         purge_videos if params[:deleted_videos].present?
-        attach_images(params[:horse][:images]) if params[:horse][:images].present?
-        attach_videos(params[:horse][:videos]) if params[:horse][:videos].present?
+
+        # Adiciona novas imagens sem ultrapassar o limite
+        if params[:horse][:images].present?
+          total_images = @horse.images.count + params[:horse][:images].size
+          if total_images <= 5
+            attach_images(params[:horse][:images])
+          else
+            render json: { error: "Você pode adicionar no máximo 5 imagens. Atualmente, o cavalo tem #{total_images - params[:horse][:images].size} imagens." }, status: :unprocessable_entity
+            return
+          end
+        end
+
+        # Adiciona novos vídeos sem ultrapassar o limite
+        if params[:horse][:videos].present?
+          total_videos = @horse.videos.count + params[:horse][:videos].size
+          if total_videos <= 3
+            attach_videos(params[:horse][:videos])
+          else
+            render json: { error: "Você pode adicionar no máximo 3 vídeos. Atualmente, o cavalo tem #{total_videos - params[:horse][:videos].size} vídeos." }, status: :unprocessable_entity
+            return
+          end
+        end
 
         render json: @horse.as_json.merge({
           images: @horse.images.map { |img| url_for(img) },
@@ -143,93 +84,242 @@ class Api::V1::HorsesController < ApplicationController
     end
   end
 
+
+
   # Deleta um cavalo
   def destroy
     if @horse.user_id == current_user.id
+      # Criador apaga o cavalo: remove para todos
       ActiveRecord::Base.transaction do
         @horse.destroy
-        create_log(action: 'deleted', horse_name: @horse.name)
+
+        Log.create(
+        action: 'deleted',
+        horse_name: @horse.name,
+        recipient: 'N/A',
+        user_id: current_user.id,
+        created_at: Time.now
+      )
       end
       render json: { message: 'Cavalo deletado para todos, pois você é o criador.' }, status: :ok
     else
+      # Remover o vínculo do usuário atual e de todos subsequentes
+      shared_users = User.joins(:user_horses)
+                         .where(user_horses: { horse_id: @horse.id, shared_by: current_user.id })
+
+      # Remove o vínculo do usuário atual
       UserHorse.where(horse_id: @horse.id, user_id: current_user.id).destroy_all
-      render json: { message: 'Cavalo removido da sua lista.' }, status: :ok
+
+      # Propagar exclusão para todos subsequentes
+      shared_users.each do |user|
+        UserHorse.where(horse_id: @horse.id, user_id: user.id).destroy_all
+      end
+
+      render json: { message: 'Cavalo removido da sua lista e dos usuários subsequentes.' }, status: :ok
     end
   end
 
+
   # Compartilha um cavalo com outro usuário
+ # app/controllers/api/v1/horses_controller.rb
+
+  # Compartilhar cavalo com outro usuário
   def share
     recipient = User.find_by(email: params[:email])
 
     if recipient.nil?
+      # Enviar convite para novo usuário
       UserMailer.invite_new_user(current_user, params[:email], @horse).deliver_now
       render json: { message: "Convite enviado para #{params[:email]}!" }, status: :ok
     else
+      # Compartilhar com usuário existente
       if @horse.users.include?(recipient)
         render json: { error: 'Cavalo já compartilhado com este usuário' }, status: :unprocessable_entity
       else
         @horse.users << recipient
         UserMailer.share_horse_email(current_user, recipient.email, @horse).deliver_later
-        create_log(action: 'shared', horse_name: @horse.name, recipient: recipient.email)
         render json: { message: "Cavalo compartilhado com sucesso com #{recipient.email}!" }, status: :ok
+
+        # Criar log da ação de compartilhamento
+      Log.create(
+        action: 'shared',
+        horse_name: @horse.name,
+        recipient: recipient.email,
+        user_id: current_user.id,
+        created_at: Time.now
+      )
+
+      Log.create(
+        action: 'received',
+        horse_name: @horse.name,
+        recipient: current_user.email,
+        user_id: recipient.id,
+        created_at: Time.now
+      )
+
       end
     end
   end
 
-  def received_horses
-    @received_horses = Horse.joins(:user_horses).where(user_horses: { user_id: current_user.id })
 
-    render json: @received_horses.map { |horse|
-      last_transfer_to_current_user = UserHorse.where(horse_id: horse.id, user_id: current_user.id).order(created_at: :desc).first
-      sender = User.find(last_transfer_to_current_user.shared_by) if last_transfer_to_current_user&.shared_by
-      horse.as_json.merge({
-        images: horse.images.map { |image| url_for(image) },
-        sender_name: sender&.name || 'Desconhecido'
-      })
-    }
-  end
+
+def received_horses
+  @received_horses = Horse.joins(:user_horses)
+                          .where(user_horses: { user_id: current_user.id })
+
+  render json: @received_horses.map { |horse|
+    # Encontra a última transferência para o usuário atual
+    last_transfer_to_current_user = UserHorse.where(horse_id: horse.id, user_id: current_user.id)
+                                             .order(created_at: :desc)
+                                             .first
+
+    # Encontra o remetente da última transferência para o usuário atual
+    sender = if last_transfer_to_current_user
+               UserHorse.where(horse_id: horse.id)
+                        .where('created_at < ?', last_transfer_to_current_user.created_at)
+                        .order(created_at: :desc)
+                        .first
+             end
+
+    sender_user = sender ? User.find(sender.user_id) : nil
+
+    # Prioriza o remetente e, caso não exista, exibe o nome do criador
+    horse.as_json.merge({
+      images: horse.images.map { |image| url_for(image) },
+      sender_name: sender_user&.name || horse.creator&.name || 'Desconhecido'
+    })
+  }
+end
+
+
+
 
   private
 
+  # Função que purga imagens específicas do cavalo
   def purge_images
-    params[:deleted_images].each do |url|
-      @horse.images.each { |img| img.purge if url_for(img) == url }
+    return unless params[:deleted_images].present?
+
+    Rails.logger.debug "Imagens para remover: #{params[:deleted_images]}"
+
+    @horse.images.each do |image|
+      Rails.logger.debug "Verificando imagem: #{url_for(image)}"
+      if params[:deleted_images].include?(url_for(image))
+        Rails.logger.debug "Removendo imagem: #{url_for(image)}"
+        image.purge
+      end
     end
   end
 
+
+
+
+  # Função que purga vídeos específicos do cavalo
   def purge_videos
-    params[:deleted_videos].each do |url|
-      @horse.videos.each { |vid| vid.purge if url_for(vid) == url }
+    return unless params[:deleted_videos].present?
+
+    params[:deleted_videos].each do |video_url|
+      # Procura o vídeo correspondente no ActiveStorage
+      video = @horse.videos.find do |vid|
+        begin
+          url_for(vid) == video_url
+        rescue => e
+          Rails.logger.error "Erro ao verificar vídeo para exclusão: #{e.message}"
+          nil
+        end
+      end
+
+      if video
+        Rails.logger.debug "Removendo vídeo: #{url_for(video)}"
+        video.purge
+      else
+        Rails.logger.debug "Vídeo não encontrado: #{video_url}"
+      end
     end
   end
 
-  def attach_images(images)
-    images.each { |img| @horse.images.attach(img) unless @horse.images.map(&:filename).include?(img.original_filename) }
-  end
 
-  def attach_videos(videos)
-    videos.each do |vid|
-      blob = ActiveStorage::Blob.create_and_upload!(io: vid.tempfile, filename: vid.original_filename, content_type: vid.content_type)
-      @horse.videos.attach(blob)
+
+
+  # Função para anexar novas imagens, evitando duplicações
+  def attach_images(new_images)
+    return unless new_images.present?
+
+    new_images.each do |image|
+      # Verifica se a imagem já está anexada para evitar duplicação
+      unless @horse.images.map(&:filename).include?(image.original_filename)
+        Rails.logger.debug "Anexando imagem: #{image.original_filename}"
+        @horse.images.attach(image)
+      else
+        Rails.logger.debug "Imagem já anexada: #{image.original_filename}"
+      end
     end
   end
 
-  def process_ancestors(horse, ancestors_attributes)
-    ancestors_attributes.each do |ancestor_params|
-      horse.ancestors.find_or_create_by(relation_type: ancestor_params[:relation_type]).update!(ancestor_params)
+
+
+  # Função para anexar novos vídeos, evitando duplicações
+  def attach_videos(new_videos)
+    existing_filenames = @horse.videos.map { |video| video.filename.to_s }
+
+    new_videos.each do |video|
+      unless existing_filenames.include?(video.original_filename)
+        blob = ActiveStorage::Blob.create_and_upload!(
+          io: video.tempfile,
+          filename: video.original_filename,
+          content_type: video.content_type
+        )
+        @horse.videos.attach(blob)
+      end
     end
   end
 
-  def horse_params
-    params.require(:horse).permit(:name, :age, :height_cm, :description, :gender, :color, :training_level, :piroplasmosis, images: [], videos: [], ancestors_attributes: [:relation_type, :name, :breeder, :breed])
-  end
 
+  # Encontra o cavalo baseado no ID
   def set_horse
-    @horse = Horse.find_by(id: params[:id])
-    render json: { error: 'Cavalo não encontrado ou você não tem permissão para acessá-lo.' }, status: :not_found unless @horse
+    @horse = Horse
+            .left_joins(:user_horses)
+            .where('(horses.user_id = :user_id OR user_horses.user_id = :user_id)', user_id: current_user.id)
+            .find_by(id: params[:id])
+
+    unless @horse
+      render json: { error: "Cavalo não encontrado ou você não tem permissão para acessá-lo." }, status: :not_found
+    end
+  end
+
+  # Permite os parâmetros permitidos para criação e atualização de cavalo
+  def horse_params
+    params.require(:horse).permit(
+      :name, :age, :height_cm, :description, :gender, :color,
+      :training_level, :piroplasmosis, images: [], videos: [],
+      ancestors_attributes: [:relation_type, :name, :breeder, :breed, :_destroy]
+    )
   end
 
   def create_log(action:, horse_name:, recipient: nil)
-    Log.create(action: action, horse_name: horse_name, recipient: recipient || 'N/A', user_id: current_user.id)
+    Log.create(
+      action: action,
+      horse_name: horse_name,
+      recipient: recipient || 'N/A',
+      user_id: current_user.id,
+      created_at: Time.now
+    )
+  end
+
+  def process_ancestors(horse, ancestors_attributes)
+    return unless ancestors_attributes.present?
+
+    sent_relation_types = ancestors_attributes.map { |a| a[:relation_type] }
+
+    ancestors_attributes.each do |ancestor_params|
+      ancestor = horse.ancestors.find_or_initialize_by(relation_type: ancestor_params[:relation_type])
+      ancestor.update!(
+        name: ancestor_params[:name],
+        breeder: ancestor_params[:breeder],
+        breed: ancestor_params[:breed]
+      )
+    end
+
+    horse.ancestors.where.not(relation_type: sent_relation_types).destroy_all
   end
 end
