@@ -28,61 +28,34 @@ class Api::V1::HorsesController < ApplicationController
     })
   end
 
-  # Cria um novo cavalo
   def create
-    Rails.logger.info("Parâmetros recebidos no método create: #{params.inspect}")
+    Rails.logger.info("Parâmetros recebidos: #{params.inspect}")
 
     begin
-      # Criação do cavalo associado ao utilizador atual
       @horse = current_user.horses.build(horse_params)
-      Rails.logger.info("Cavalo criado (não salvo): #{@horse.inspect}")
+      Rails.logger.info("Cavalo inicializado: #{@horse.inspect}")
 
-      # Salvar o cavalo
       if @horse.save
-        Rails.logger.info("Cavalo salvo com sucesso: #{@horse.id}")
+        Rails.logger.info("Cavalo salvo com sucesso.")
 
-        # Processa ancestrais
-        if params[:horse][:ancestors_attributes].is_a?(Array)
-          params[:horse][:ancestors_attributes].each do |ancestor_params|
-            if ancestor_params.is_a?(Hash) && ancestor_params[:relation_type].present? && ancestor_params[:name].present?
-              Rails.logger.info("Criando ancestral: #{ancestor_params.inspect}")
-              @horse.ancestors.create!(
-                relation_type: ancestor_params[:relation_type],
-                name: ancestor_params[:name],
-                breeder: ancestor_params[:breeder],
-                breed: ancestor_params[:breed]
-              )
-            else
-              Rails.logger.warn("Ancestral ignorado por falta de dados: #{ancestor_params.inspect}")
-            end
-          end
-        else
-          Rails.logger.info("Nenhum ancestral recebido.")
-        end
-
-        # Processa imagens, se existirem
+        # Faz upload manual das imagens para o Cloudinary
         if params[:horse][:images]
           params[:horse][:images].each do |image|
-            Rails.logger.info("Anexando imagem: #{image.original_filename}")
-            @horse.images.attach(image)
+            Rails.logger.info("Fazendo upload de imagem: #{image.original_filename}")
+            result = Cloudinary::Uploader.upload(image.path)
+            @horse.images.attach(io: URI.open(result['secure_url']), filename: image.original_filename)
           end
-          Rails.logger.info("Imagens anexadas: #{@horse.images.count}")
-        else
-          Rails.logger.info("Nenhuma imagem foi recebida.")
         end
 
-        # Processa vídeos, se existirem
+        # Faz upload manual dos vídeos para o Cloudinary
         if params[:horse][:videos]
           params[:horse][:videos].each do |video|
-            Rails.logger.info("Anexando vídeo: #{video.original_filename}")
-            @horse.videos.attach(video)
+            Rails.logger.info("Fazendo upload de vídeo: #{video.original_filename}")
+            result = Cloudinary::Uploader.upload(video.path, resource_type: 'video')
+            @horse.videos.attach(io: URI.open(result['secure_url']), filename: video.original_filename)
           end
-          Rails.logger.info("Vídeos anexados: #{@horse.videos.count}")
-        else
-          Rails.logger.info("Nenhum vídeo foi recebido.")
         end
 
-        # Retorna o cavalo criado com as URLs de imagens, vídeos e ancestrais anexados
         render json: @horse.as_json.merge({
           images: @horse.images.map { |image| url_for(image) },
           videos: @horse.videos.map { |video| url_for(video) },
@@ -92,14 +65,13 @@ class Api::V1::HorsesController < ApplicationController
         Rails.logger.error("Erro ao salvar cavalo: #{@horse.errors.full_messages}")
         render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
       end
-
     rescue => e
-      # Captura e loga erros inesperados
-      Rails.logger.error("Erro inesperado no método create: #{e.message}")
-      Rails.logger.error("Backtrace:\n#{e.backtrace.join("\n")}")
+      Rails.logger.error("Erro no método create: #{e.message}")
+      Rails.logger.error("Backtrace: #{e.backtrace.join("\n")}")
       render json: { error: "Erro interno do servidor." }, status: :internal_server_error
     end
   end
+
 
 
   def update
