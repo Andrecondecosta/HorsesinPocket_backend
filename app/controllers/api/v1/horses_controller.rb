@@ -29,26 +29,84 @@ class Api::V1::HorsesController < ApplicationController
 
   # Cria um novo cavalo
   def create
+    logs = []
     begin
+      # Log dos parâmetros recebidos
+      logs << "Parâmetros recebidos: #{params.inspect}"
+
+      # Criação do cavalo associado ao utilizador atual
       @horse = current_user.horses.build(horse_params)
+      logs << "Cavalo criado (não salvo): #{@horse.inspect}"
 
       if @horse.save
-        process_ancestors(@horse, params[:horse][:ancestors_attributes]) if params[:horse][:ancestors_attributes].present?
-        attach_images(params[:horse][:images]) if params[:horse][:images].present?
-        attach_videos(params[:horse][:videos]) if params[:horse][:videos].present?
+        logs << "Cavalo salvo com sucesso: #{@horse.id}"
 
-        render json: @horse.as_json.merge({
-          images: @horse.images.map { |image| url_for(image) },
-          videos: @horse.videos.map { |video| url_for(video) },
-          ancestors: @horse.ancestors
-        }), status: :created
+        # Processa ancestrais, se aplicáveis
+        if params[:horse][:ancestors_attributes].is_a?(Array)
+          params[:horse][:ancestors_attributes].each do |ancestor_params|
+            if ancestor_params[:relation_type].present? && ancestor_params[:name].present?
+              @horse.ancestors.create!(
+                relation_type: ancestor_params[:relation_type],
+                name: ancestor_params[:name],
+                breeder: ancestor_params[:breeder],
+                breed: ancestor_params[:breed]
+              )
+            else
+              logs << "Ancestral ignorado: Dados incompletos - #{ancestor_params.inspect}"
+            end
+          end
+        end
+
+        # Processa imagens, se existirem
+        if params[:horse][:images].present?
+          params[:horse][:images].each do |image|
+            begin
+              logs << "Anexando imagem: #{image.original_filename}"
+              @horse.images.attach(image)
+            rescue => e
+              logs << "Erro ao anexar imagem #{image.original_filename}: #{e.message}"
+            end
+          end
+        else
+          logs << "Nenhuma imagem recebida."
+        end
+
+        # Processa vídeos, se existirem
+        if params[:horse][:videos].present?
+          params[:horse][:videos].each do |video|
+            begin
+              logs << "Anexando vídeo: #{video.original_filename}"
+              @horse.videos.attach(video)
+            rescue => e
+              logs << "Erro ao anexar vídeo #{video.original_filename}: #{e.message}"
+            end
+          end
+        else
+          logs << "Nenhum vídeo recebido."
+        end
+
+        # Retorna o cavalo criado com logs para debug
+        render json: {
+          horse: @horse.as_json.merge({
+            images: @horse.images.map { |image| url_for(image) },
+            videos: @horse.videos.map { |video| url_for(video) },
+            ancestors: @horse.ancestors
+          }),
+          logs: logs
+        }, status: :created
       else
-        render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
+        logs << "Erro ao salvar cavalo: #{@horse.errors.full_messages}"
+        render json: { errors: @horse.errors.full_messages, logs: logs }, status: :unprocessable_entity
       end
+
     rescue => e
-      render json: { error: "Erro interno do servidor: #{e.message}" }, status: :internal_server_error
+      # Captura erros inesperados
+      logs << "Erro inesperado: #{e.message}"
+      logs << "Backtrace: #{e.backtrace.take(10).join("\n")}"
+      render json: { error: "Erro interno do servidor.", logs: logs }, status: :internal_server_error
     end
   end
+
 
   # Atualiza um cavalo existente
   def update
