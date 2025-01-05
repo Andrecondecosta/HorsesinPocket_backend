@@ -182,20 +182,28 @@ class Api::V1::HorsesController < ApplicationController
   # Verificação de links partilhados
   def shared
     shared_link = SharedLink.find_by!(token: params[:token])
+
     if shared_link.expired?
       render json: { error: 'Link expirado' }, status: :unauthorized
-    elsif shared_link.active?
+    else
+      # Adiciona o cavalo à lista de recebidos do utilizador atual
+      unless current_user.horses.include?(shared_link.horse)
+        UserHorse.create!(
+          user_id: current_user.id,
+          horse_id: shared_link.horse.id,
+          shared_by: shared_link.horse.user_id
+        )
+      end
+
+      # Retorna o cavalo partilhado
       render json: shared_link.horse.as_json.merge({
         images: shared_link.horse.images.map { |img| url_for(img) },
         videos: shared_link.horse.videos.map { |vid| url_for(vid) },
         ancestors: shared_link.horse.ancestors
       }), status: :ok
-    else
-      render json: { error: 'Link inválido' }, status: :forbidden
     end
-  rescue ActiveRecord::RecordNotFound
-    render json: { error: 'Token inválido ou não encontrado' }, status: :not_found
   end
+
 
 
 
