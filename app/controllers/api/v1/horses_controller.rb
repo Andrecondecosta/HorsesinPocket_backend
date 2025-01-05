@@ -125,40 +125,47 @@ class Api::V1::HorsesController < ApplicationController
 
   # Compartilhar cavalo com outro usuário
   def share
+    Rails.logger.info("Iniciando compartilhamento do cavalo ID: #{@horse.id}, para email: #{params[:email]} por usuário: #{current_user.email}")
+
     recipient = User.find_by(email: params[:email])
 
     if recipient.nil?
+      Rails.logger.info("Usuário não encontrado. Enviando convite para #{params[:email]}")
       # Enviar convite para novo usuário
       UserMailer.invite_new_user(current_user, params[:email], @horse).deliver_now
       render json: { message: "Convite enviado para #{params[:email]}!" }, status: :ok
     else
       # Compartilhar com usuário existente
       if @horse.users.include?(recipient)
+        Rails.logger.warn("Cavalo já compartilhado com #{recipient.email}")
         render json: { error: 'Cavalo já compartilhado com este usuário' }, status: :unprocessable_entity
       else
+        Rails.logger.info("Compartilhando cavalo com usuário existente: #{recipient.email}")
         @horse.users << recipient
         UserMailer.share_horse_email(current_user, recipient.email, @horse).deliver_later
-        render json: { message: "Cavalo compartilhado com sucesso com #{recipient.email}!" }, status: :ok
 
         # Criar log da ação de compartilhamento
-      Log.create(
-        action: 'shared',
-        horse_name: @horse.name,
-        recipient: recipient.email,
-        user_id: current_user.id,
-        created_at: Time.now
-      )
+        Log.create(
+          action: 'shared',
+          horse_name: @horse.name,
+          recipient: recipient.email,
+          user_id: current_user.id,
+          created_at: Time.now
+        )
+        Log.create(
+          action: 'received',
+          horse_name: @horse.name,
+          recipient: current_user.email,
+          user_id: recipient.id,
+          created_at: Time.now
+        )
 
-      Log.create(
-        action: 'received',
-        horse_name: @horse.name,
-        recipient: current_user.email,
-        user_id: recipient.id,
-        created_at: Time.now
-      )
-
+        render json: { message: "Cavalo compartilhado com sucesso com #{recipient.email}!" }, status: :ok
       end
     end
+  rescue => e
+    Rails.logger.error("Erro ao compartilhar cavalo: #{e.message}")
+    render json: { error: 'Erro ao compartilhar cavalo. Por favor, tente novamente.' }, status: :internal_server_error
   end
 
 
