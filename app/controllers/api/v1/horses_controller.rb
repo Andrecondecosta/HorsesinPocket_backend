@@ -185,23 +185,19 @@ class Api::V1::HorsesController < ApplicationController
 
     if shared_link.expired?
       render json: { error: 'Link expirado' }, status: :unauthorized
+    elsif shared_link.active?
+      render json: shared_link.horse.as_json.merge({
+        images: shared_link.horse.images.map { |img| url_for(img) },
+        videos: shared_link.horse.videos.map { |vid| url_for(vid) },
+        ancestors: shared_link.horse.ancestors
+      }), status: :ok
     else
-      # Verifica se o utilizador está autenticado
-      if current_user
-        # Adiciona o cavalo à lista de recebidos do utilizador
-        UserHorse.create!(user_id: current_user.id, horse_id: shared_link.horse.id, shared_by: shared_link.horse.user_id)
-
-        render json: shared_link.horse.as_json.merge({
-          images: shared_link.horse.images.map { |img| url_for(img) },
-          videos: shared_link.horse.videos.map { |vid| url_for(vid) },
-          ancestors: shared_link.horse.ancestors
-        }), status: :ok
-      else
-        # Não autenticado
-        render json: { error: 'Autenticação necessária' }, status: :unauthorized
-      end
+      render json: { error: 'Link inválido' }, status: :forbidden
     end
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: 'Link não encontrado' }, status: :not_found
   end
+
 
 
 
