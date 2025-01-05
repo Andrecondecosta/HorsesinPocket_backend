@@ -182,7 +182,6 @@ class Api::V1::HorsesController < ApplicationController
   # Verificação de links partilhados
   def shared
     shared_link = SharedLink.find_by!(token: params[:token])
-
     if shared_link.expired?
       render json: { error: 'Link expirado' }, status: :unauthorized
     elsif shared_link.active?
@@ -195,8 +194,9 @@ class Api::V1::HorsesController < ApplicationController
       render json: { error: 'Link inválido' }, status: :forbidden
     end
   rescue ActiveRecord::RecordNotFound
-    render json: { error: 'Link não encontrado' }, status: :not_found
+    render json: { error: 'Token inválido ou não encontrado' }, status: :not_found
   end
+
 
 
 
