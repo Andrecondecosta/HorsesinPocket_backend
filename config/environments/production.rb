@@ -94,6 +94,7 @@ Rails.application.configure do
   config.logger = Logger.new(STDOUT)
   config.logger.formatter = ::Logger::Formatter.new
 
+  config.action_mailer.default_url_options = { host: 'horsesinpocket-frontend.onrender.com', protocol: 'https' }
 
 
 end

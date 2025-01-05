@@ -6,7 +6,7 @@ class Horse < ApplicationRecord
   has_many_attached :images
   has_many_attached :videos
   has_many :ancestors, dependent: :destroy
-
+  has_many :shared_links, dependent: :destroy
   accepts_nested_attributes_for :ancestors, allow_destroy: true
 
   validates :name, :age, :height_cm, :gender, :color, presence: true

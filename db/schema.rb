@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_12_22_150755) do
+ActiveRecord::Schema[7.1].define(version: 2025_01_05_190124) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -92,6 +92,26 @@ ActiveRecord::Schema[7.1].define(version: 2024_12_22_150755) do
     t.index ["horse_id"], name: "index_photos_on_horse_id"
   end
 
+  create_table "share_links", force: :cascade do |t|
+    t.bigint "horse_id", null: false
+    t.string "token"
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["horse_id"], name: "index_share_links_on_horse_id"
+  end
+
+  create_table "shared_links", force: :cascade do |t|
+    t.string "token", null: false
+    t.bigint "horse_id", null: false
+    t.datetime "expires_at"
+    t.string "status", default: "active"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["horse_id"], name: "index_shared_links_on_horse_id"
+    t.index ["token"], name: "index_shared_links_on_token", unique: true
+  end
+
   create_table "user_horses", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.bigint "horse_id", null: false
@@ -141,6 +161,8 @@ ActiveRecord::Schema[7.1].define(version: 2024_12_22_150755) do
   add_foreign_key "horses_users", "horses"
   add_foreign_key "horses_users", "users"
   add_foreign_key "photos", "horses"
+  add_foreign_key "share_links", "horses"
+  add_foreign_key "shared_links", "horses"
   add_foreign_key "user_horses", "horses"
   add_foreign_key "user_horses", "users"
   add_foreign_key "user_horses", "users", column: "shared_by"

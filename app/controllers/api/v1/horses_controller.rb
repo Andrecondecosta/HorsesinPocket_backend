@@ -1,5 +1,8 @@
+include Rails.application.routes.url_helpers
+
 class Api::V1::HorsesController < ApplicationController
-  before_action :set_horse, only: [:show, :update, :destroy, :share]
+  skip_before_action :authorized, only: [:shared]
+  before_action :set_horse, only: [:show, :update, :destroy, :share_via_email, :share_via_link]
 
   # Lista todos os cavalos do usuário autenticado
   def index
@@ -124,18 +127,16 @@ class Api::V1::HorsesController < ApplicationController
  # app/controllers/api/v1/horses_controller.rb
 
   # Compartilhar cavalo com outro usuário
-  def share
+  def share_via_email
     Rails.logger.info("Iniciando compartilhamento do cavalo ID: #{@horse.id}, para email: #{params[:email]} por usuário: #{current_user.email}")
 
     recipient = User.find_by(email: params[:email])
 
     if recipient.nil?
       Rails.logger.info("Usuário não encontrado. Enviando convite para #{params[:email]}")
-      # Enviar convite para novo usuário
       UserMailer.invite_new_user(current_user, params[:email], @horse).deliver_now
       render json: { message: "Convite enviado para #{params[:email]}!" }, status: :ok
     else
-      # Compartilhar com usuário existente
       if @horse.users.include?(recipient)
         Rails.logger.warn("Cavalo já compartilhado com #{recipient.email}")
         render json: { error: 'Cavalo já compartilhado com este usuário' }, status: :unprocessable_entity
@@ -144,21 +145,8 @@ class Api::V1::HorsesController < ApplicationController
         @horse.users << recipient
         UserMailer.share_horse_email(current_user, recipient.email, @horse).deliver_later
 
-        # Criar log da ação de compartilhamento
-        Log.create(
-          action: 'shared',
-          horse_name: @horse.name,
-          recipient: recipient.email,
-          user_id: current_user.id,
-          created_at: Time.now
-        )
-        Log.create(
-          action: 'received',
-          horse_name: @horse.name,
-          recipient: current_user.email,
-          user_id: recipient.id,
-          created_at: Time.now
-        )
+        Log.create(action: 'shared', horse_name: @horse.name, recipient: recipient.email, user_id: current_user.id)
+        Log.create(action: 'received', horse_name: @horse.name, recipient: current_user.email, user_id: recipient.id)
 
         render json: { message: "Cavalo compartilhado com sucesso com #{recipient.email}!" }, status: :ok
       end
@@ -167,6 +155,48 @@ class Api::V1::HorsesController < ApplicationController
     Rails.logger.error("Erro ao compartilhar cavalo: #{e.message}")
     render json: { error: 'Erro ao compartilhar cavalo. Por favor, tente novamente.' }, status: :internal_server_error
   end
+
+  # Método para gerar link de partilha
+  def share_via_link
+    shared_link = @horse.shared_links.create!(
+      expires_at: params[:expires_at]
+    )
+
+    # Configure o host manualmente
+    link = "#{Rails.application.routes.default_url_options[:host]}/api/v1/horses/shared/#{shared_link.token}"
+
+    render json: {
+      link: link,
+      expires_at: shared_link.expires_at
+    }, status: :created
+  end
+
+
+
+  # Verificação de links partilhados
+  def shared
+    shared_link = SharedLink.find_by!(token: params[:token])
+
+    if shared_link.expired?
+      render json: { error: 'Link expirado' }, status: :unauthorized
+    else
+      # Verifica se o utilizador está autenticado
+      if current_user
+        # Adiciona o cavalo à lista de recebidos do utilizador
+        UserHorse.create!(user_id: current_user.id, horse_id: shared_link.horse.id, shared_by: shared_link.horse.user_id)
+
+        render json: shared_link.horse.as_json.merge({
+          images: shared_link.horse.images.map { |img| url_for(img) },
+          videos: shared_link.horse.videos.map { |vid| url_for(vid) },
+          ancestors: shared_link.horse.ancestors
+        }), status: :ok
+      else
+        # Não autenticado
+        render json: { error: 'Autenticação necessária' }, status: :unauthorized
+      end
+    end
+  end
+
 
 
 
