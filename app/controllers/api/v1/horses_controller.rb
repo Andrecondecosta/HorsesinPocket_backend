@@ -163,7 +163,7 @@ class Api::V1::HorsesController < ApplicationController
     )
 
     # Configure o host manualmente
-    link = "#{Rails.application.routes.default_url_options[:host]}/api/v1/horses/shared/#{shared_link.token}"
+    link = "https://#{Rails.application.config.host}/horses/shared/#{shared_link.token}"
 
     render json: {
       link: link,
