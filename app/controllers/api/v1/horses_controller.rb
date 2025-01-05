@@ -165,11 +165,8 @@ class Api::V1::HorsesController < ApplicationController
     )
 
     # Usar default_url_options para gerar o link correto
-    link = Rails.application.routes.url_helpers.shared_horse_url(
-      shared_link.token,
-      host: Rails.application.routes.default_url_options[:host],
-      protocol: Rails.application.routes.default_url_options[:protocol] || 'http'
-    )
+    link = "#{Rails.application.routes.default_url_options[:host]}/horses/shared/#{shared_link.token}"
+
 
     render json: {
       link: link,
