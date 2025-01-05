@@ -22,7 +22,7 @@ Rails.application.routes.draw do
   end
 
   # Rota para links partilhados, fora do namespace
-  get 'horses/shared/:token', to: 'api/v1/horses#shared', as: :shared_horse
+  get 'horses/shared/:token', to: 'horses#shared', as: :shared_horse
 end
 
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
