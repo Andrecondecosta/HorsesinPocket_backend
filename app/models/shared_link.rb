@@ -13,8 +13,13 @@ class SharedLink < ApplicationRecord
     expires_at.present? && Time.current > expires_at
   end
 
-  # Valida se o link está ativo
-  def active?
-    !expired? && status == 'active'
+  # Valida se o link está ativo e ainda não foi usado
+  def valid_for_one_time_use?
+    !expired? && used_at.nil? && status == 'active'
+  end
+
+  # Marca o link como usado
+  def mark_as_used!
+    update!(used_at: Time.current, status: 'used')
   end
 end

@@ -180,27 +180,34 @@ class Api::V1::HorsesController < ApplicationController
   def shared
     shared_link = SharedLink.find_by!(token: params[:token])
 
-    if shared_link.expired?
-      render json: { error: 'Link expirado' }, status: :unauthorized
-    else
-      # Adiciona o cavalo à lista de recebidos do utilizador atual
-      unless current_user.horses.include?(shared_link.horse)
-        UserHorse.create!(
-          user_id: current_user.id,
-          horse_id: shared_link.horse.id,
-          shared_by: shared_link.horse.user_id
-        )
-      end
-
-      # Retorna o cavalo partilhado
-      render json: shared_link.horse.as_json.merge({
-        images: shared_link.horse.images.map { |img| url_for(img) },
-        videos: shared_link.horse.videos.map { |vid| url_for(vid) },
-        ancestors: shared_link.horse.ancestors
-      }), status: :ok
+    # Verifica se o link ainda é válido (não expirou e não foi usado)
+    if !shared_link.valid_for_one_time_use?
+      render json: { error: 'Este link já foi utilizado ou expirou.' }, status: :forbidden
+      return
     end
-  end
 
+    # Se o utilizador não estiver autenticado, apenas verifica o link
+    unless current_user
+      render json: { message: 'É necessário fazer login para continuar.' }, status: :unauthorized
+      return
+    end
+
+    # Adiciona o cavalo à lista de recebidos e marca o link como usado
+    ActiveRecord::Base.transaction do
+      UserHorse.create!(
+        horse_id: shared_link.horse_id,
+        user_id: current_user.id,
+        shared_by: shared_link.horse.user_id
+      )
+      shared_link.mark_as_used!
+    end
+
+    render json: shared_link.horse.as_json.merge({
+      images: shared_link.horse.images.map { |img| url_for(img) },
+      videos: shared_link.horse.videos.map { |vid| url_for(vid) },
+      ancestors: shared_link.horse.ancestors
+    }), status: :ok
+  end
 
 
 
