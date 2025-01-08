@@ -20,18 +20,26 @@ class Api::V1::HorsesController < ApplicationController
 
   # Exibe um cavalo específico e suas mídias
   def show
-    render json: @horse.as_json.merge({
-      images: @horse.images.map { |image| url_for(image) },
-      videos: @horse.videos.map { |video| url_for(video) },
-      ancestors: @horse.ancestors
-    })
+    horse = Horse.find(params[:id])
+    render json: horse.as_json.merge(
+      is_owner: horse.creator == current_user, # Verifica se o criador é o usuário atual
+      images: horse.images.map { |image| url_for(image) },
+      videos: horse.videos.map { |video| url_for(video) },
+      ancestors: horse.ancestors
+    )
   end
 
   # Cria um novo cavalo
   def create
     @horse = current_user.horses.build(horse_params)
     if @horse.save
-      create_log(action: 'created', horse_name: @horse.name)
+      Log.create(
+            action: 'created',
+            horse_name: @horse.name,
+            recipient: current_user.name,
+            user_id: current_user.id,
+            created_at: Time.now
+          )
       process_ancestors(@horse, params[:horse][:ancestors_attributes])
 
       render json: @horse.as_json.merge({
@@ -84,6 +92,15 @@ class Api::V1::HorsesController < ApplicationController
       else
         render json: { errors: @horse.errors.full_messages }, status: :unprocessable_entity
       end
+
+      # Criar log de edição
+      Log.create(
+        action: 'updated',
+        horse_name: @horse.name,
+        recipient: current_user.name,
+        user_id: current_user.id,
+        created_at: Time.current
+      )
     end
   end
 
@@ -95,14 +112,14 @@ class Api::V1::HorsesController < ApplicationController
       # Criador apaga o cavalo: remove para todos
       ActiveRecord::Base.transaction do
         @horse.destroy
-
         Log.create(
         action: 'deleted',
         horse_name: @horse.name,
-        recipient: 'N/A',
+        recipient: current_user.name,
         user_id: current_user.id,
         created_at: Time.now
       )
+
       end
       render json: { message: 'Cavalo deletado para todos, pois você é o criador.' }, status: :ok
     else
@@ -166,7 +183,6 @@ class Api::V1::HorsesController < ApplicationController
 
     # Usar default_url_options para gerar o link correto
     link = "#{Rails.application.routes.default_url_options[:host]}/horses/shared/#{shared_link.token}"
-
 
     render json: {
       link: link,
