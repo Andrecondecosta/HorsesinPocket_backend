@@ -9,6 +9,9 @@ Rails.application.routes.draw do
         resources :photos, only: [:create, :destroy]
         resources :videos, only: [:create, :destroy]
         resources :xrays, only: [:create, :destroy]
+        member do
+          delete :delete_shares
+        end
       end
       resource :password, only: [] do
         collection do

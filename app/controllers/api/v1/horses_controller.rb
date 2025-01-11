@@ -2,7 +2,7 @@ include Rails.application.routes.url_helpers
 
 class Api::V1::HorsesController < ApplicationController
   skip_before_action :authorized, only: [:shared]
-  before_action :set_horse, only: [:show, :update, :destroy, :share_via_email, :share_via_link]
+  before_action :set_horse, only: [:show, :update, :destroy, :delete_shares, :share_via_email, :share_via_link]
 
   # Lista todos os cavalos do usuário autenticado
   def index
@@ -109,41 +109,70 @@ class Api::V1::HorsesController < ApplicationController
   # Deleta um cavalo
   def destroy
     if @horse.user_id == current_user.id
-      # Criador apaga o cavalo: remove para todos
+      # Criador apaga completamente o cavalo
       ActiveRecord::Base.transaction do
-        @horse.destroy
-        Log.create(
-        action: 'deleted',
-        horse_name: @horse.name,
-        recipient: current_user.name,
-        user_id: current_user.id,
-        created_at: Time.now
-      )
+        # Apaga registros associados em massa
+        UserHorse.where(horse_id: @horse.id).delete_all
+        Ancestor.where(horse_id: @horse.id).delete_all
+        SharedLink.where(horse_id: @horse.id).delete_all
 
+        # Remove anexos do ActiveStorage
+        @horse.images.purge_later
+        @horse.videos.purge_later
+
+        # Apaga o próprio cavalo
+        @horse.destroy!
+
+        # Cria log da ação
+        Log.create!(
+          action: 'deleted',
+          horse_name: @horse.name,
+          recipient: current_user.name,
+          user_id: current_user.id,
+          created_at: Time.current
+        )
       end
       render json: { message: 'Cavalo deletado para todos, pois você é o criador.' }, status: :ok
     else
-      # Remover o vínculo do usuário atual e de todos subsequentes
-      shared_users = User.joins(:user_horses)
-                         .where(user_horses: { horse_id: @horse.id, shared_by: current_user.id })
-
-      # Remove o vínculo do usuário atual
-      UserHorse.where(horse_id: @horse.id, user_id: current_user.id).destroy_all
-
-      # Propagar exclusão para todos subsequentes
-      shared_users.each do |user|
-        UserHorse.where(horse_id: @horse.id, user_id: user.id).destroy_all
+      # Outros usuários removem apenas seu vínculo e compartilhamentos subsequentes
+      ActiveRecord::Base.transaction do
+        UserHorse.where(horse_id: @horse.id, user_id: current_user.id).destroy_all
+        remove_shared_users(current_user.id)
       end
-
-      render json: { message: 'Cavalo removido da sua lista e dos usuários subsequentes.' }, status: :ok
+      render json: { message: 'Cavalo removido para você e os usuários subsequentes.' }, status: :ok
     end
+  rescue => e
+    Rails.logger.error "Erro ao deletar cavalo ou registros associados: #{e.message}"
+    render json: { error: 'Erro ao processar a exclusão. Tente novamente.' }, status: :internal_server_error
   end
 
 
-  # Compartilha um cavalo com outro usuário
- # app/controllers/api/v1/horses_controller.rb
 
-  # Compartilhar cavalo com outro usuário
+  def delete_shares
+    ActiveRecord::Base.transaction do
+      shared_users = User.joins(:user_horses)
+                         .where(user_horses: { horse_id: @horse.id, shared_by: current_user.id })
+
+      Rails.logger.info "Registros na tabela user_horses para horse_id=#{@horse.id}, shared_by=#{current_user.id}:"
+      Rails.logger.info UserHorse.where(horse_id: @horse.id, shared_by: current_user.id).pluck(:id, :user_id, :shared_by)
+
+      Rails.logger.info "Usuários compartilhados diretamente pelo usuário #{current_user.id}: #{shared_users.map(&:id)}"
+
+      shared_users.each do |user|
+        UserHorse.where(horse_id: @horse.id, user_id: user.id).destroy_all
+        remove_shared_users(user.id)
+      end
+    end
+
+    render json: { message: 'Compartilhamentos subsequentes removidos com sucesso.' }, status: :ok
+  rescue StandardError => e
+    Rails.logger.error "Erro ao remover compartilhamentos: #{e.message}"
+    render json: { error: 'Erro ao remover compartilhamentos subsequentes.' }, status: :internal_server_error
+  end
+
+
+
+
   def share_via_email
     Rails.logger.info("Iniciando compartilhamento do cavalo ID: #{@horse.id}, para email: #{params[:email]} por usuário: #{current_user.email}")
 
@@ -160,8 +189,15 @@ class Api::V1::HorsesController < ApplicationController
       else
         Rails.logger.info("Compartilhando cavalo com usuário existente: #{recipient.email}")
         @horse.users << recipient
+
+        # Atualizar ou criar o vínculo com o valor correto de `shared_by`
+        user_horse = UserHorse.find_or_initialize_by(horse_id: @horse.id, user_id: recipient.id)
+        user_horse.shared_by = current_user.id
+        user_horse.save!
+
         UserMailer.share_horse_email(current_user, recipient.email, @horse).deliver_later
 
+        # Criar logs de compartilhamento
         Log.create(action: 'shared', horse_name: @horse.name, recipient: recipient.email, user_id: current_user.id)
         Log.create(action: 'received', horse_name: @horse.name, recipient: current_user.email, user_id: recipient.id)
 
@@ -173,23 +209,30 @@ class Api::V1::HorsesController < ApplicationController
     render json: { error: 'Erro ao compartilhar cavalo. Por favor, tente novamente.' }, status: :internal_server_error
   end
 
-  # Método para gerar link de partilha
   def share_via_link
+    # Cria um link compartilhável para o cavalo
     shared_link = @horse.shared_links.create!(
       token: SecureRandom.urlsafe_base64(10),
       expires_at: params[:expires_at],
       status: 'active'
     )
 
-    # Usar default_url_options para gerar o link correto
+    # Atualiza ou cria o vínculo entre o cavalo e o usuário atual
+    user_horse = UserHorse.find_or_initialize_by(horse_id: @horse.id, user_id: current_user.id)
+    user_horse.shared_by ||= current_user.id
+    user_horse.save!
+
+    # Gera o link compartilhável
     link = "#{Rails.application.routes.default_url_options[:host]}/horses/shared/#{shared_link.token}"
 
     render json: {
       link: link,
       expires_at: shared_link.expires_at
     }, status: :created
+  rescue => e
+    Rails.logger.error "Erro ao criar link de compartilhamento: #{e.message}"
+    render json: { error: 'Erro ao criar link de compartilhamento. Tente novamente.' }, status: :internal_server_error
   end
-
 
 
   # Verificação de links partilhados
@@ -389,4 +432,23 @@ end
 
     horse.ancestors.where.not(relation_type: sent_relation_types).destroy_all
   end
+
+  def remove_shared_users(shared_by)
+    # Busca usuários subsequentes que receberam o cavalo de `shared_by`
+    shared_users = User.joins(:user_horses)
+                       .where(user_horses: { horse_id: @horse.id, shared_by: shared_by })
+
+    Rails.logger.info "Usuários subsequentes encontrados para shared_by #{shared_by}: #{shared_users.map(&:id)}"
+
+    shared_users.each do |user|
+      Rails.logger.info "Removendo vínculo subsequente de #{user.name} (User ID: #{user.id})"
+
+      # Remove o vínculo
+      UserHorse.where(horse_id: @horse.id, user_id: user.id).destroy_all
+
+      # Recursivamente remove compartilhamentos subsequentes
+      remove_shared_users(user.id)
+    end
+  end
+
 end
