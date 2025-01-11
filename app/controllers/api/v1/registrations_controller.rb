@@ -11,12 +11,13 @@ class Api::V1::RegistrationsController < ApplicationController
 
     if user.save
       UserMailer.confirmation_email(user).deliver_later
-      token = encode_token({ user_id: user.id })
+      token = encode_token({ user_id: user.id }) # Gera o token JWT
       render json: { token: token, message: 'Usuário criado com sucesso!' }, status: :created
     else
       render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
     end
   end
+
 
   def update
     if current_user.update(user_params)

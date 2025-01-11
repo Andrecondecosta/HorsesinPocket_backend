@@ -9,4 +9,9 @@ class User < ApplicationRecord
   def name
     "#{first_name} #{last_name}"
   end
+
+  # Adiciona um booleano `admin` na tabela Users para diferenciar administradores
+  def admin?
+    self.admin
+  end
 end

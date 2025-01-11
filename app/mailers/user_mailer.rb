@@ -19,6 +19,13 @@ class UserMailer < ApplicationMailer
 
   def confirmation_email(user)
     @user = user
-    mail(to: @user.email, subject: 'Confirmação de Cadastro')
+    @confirmation_url = confirm_user_url(@user) # Gera a URL de confirmação
+    mail(to: @user.email, subject: "Confirmação de Email - HorsesInPocket")
+  end
+
+  def password_reset_email(user, token)
+    @user = user
+    @token = token
+    mail(to: @user.email, subject: 'Redefinir sua senha')
   end
 end

@@ -10,23 +10,33 @@ Rails.application.routes.draw do
         resources :videos, only: [:create, :destroy]
         resources :xrays, only: [:create, :destroy]
       end
-
-      resources :logs, only: [:index]
+      resource :password, only: [] do
+        collection do
+          post :forgot
+          patch :reset
+        end
+      end
+      resources :users do
+        member do
+          get :confirm_email
+        end
+      end
       post '/login', to: 'sessions#create'
       post '/signup', to: 'registrations#create'
       get '/profile', to: 'registrations#show'
       put '/update', to: 'registrations#update'
       get '/received', to: 'horses#received_horses'
-      get 'home/index'
 
-      # Rota para links partilhados no namespace
-      get 'horses/shared/:token', to: 'horses#shared', as: :shared_horse
+      # Rotas administrativas
+      resources :logs, only: [:index]
+
+      namespace :admin do
+        get '/dashboard', to: 'dashboard#index'
+        get '/statistics', to: 'dashboard#statistics'
+        get '/users', to: 'dashboard#users'
+        get '/horses', to: 'dashboard#horses'
+        get '/logs', to: 'dashboard#logs'
+      end
     end
   end
 end
-  # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
-
-  # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
-  # Can be used by load balancers and uptime monitors to verify that the app is live.
-  # Defines the root path route ("/")
-  # root "posts#index"
