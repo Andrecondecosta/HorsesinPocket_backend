@@ -9,6 +9,7 @@ Rails.application.routes.draw do
         resources :photos, only: [:create, :destroy]
         resources :videos, only: [:create, :destroy]
         resources :xrays, only: [:create, :destroy]
+        get 'shared/:token', to: 'horses#shared', as: :shared_horse
         member do
           delete :delete_shares
         end
