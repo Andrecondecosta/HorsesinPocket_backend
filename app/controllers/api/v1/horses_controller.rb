@@ -225,6 +225,7 @@ class Api::V1::HorsesController < ApplicationController
     # Gera o link compartilhável
     link = "#{Rails.application.routes.default_url_options[:host]}/horses/shared/#{shared_link.token}"
 
+
     render json: {
       link: link,
       expires_at: shared_link.expires_at
@@ -239,19 +240,16 @@ class Api::V1::HorsesController < ApplicationController
   def shared
     shared_link = SharedLink.find_by!(token: params[:token])
 
-    # Verifica se o link ainda é válido (não expirou e não foi usado)
     if !shared_link.valid_for_one_time_use?
       render json: { error: 'Este link já foi utilizado ou expirou.' }, status: :forbidden
       return
     end
 
-    # Se o utilizador não estiver autenticado, apenas verifica o link
     unless current_user
       render json: { message: 'É necessário fazer login para continuar.' }, status: :unauthorized
       return
     end
 
-    # Adiciona o cavalo à lista de recebidos e marca o link como usado
     ActiveRecord::Base.transaction do
       UserHorse.create!(
         horse_id: shared_link.horse_id,
@@ -261,16 +259,8 @@ class Api::V1::HorsesController < ApplicationController
       shared_link.mark_as_used!
     end
 
-    render json: shared_link.horse.as_json.merge({
-      images: shared_link.horse.images.map { |img| url_for(img) },
-      videos: shared_link.horse.videos.map { |vid| url_for(vid) },
-      ancestors: shared_link.horse.ancestors
-    }), status: :ok
+    render json: { message: 'Cavalo adicionado aos recebidos com sucesso.' }, status: :ok
   end
-
-
-
-
 
 
 def received_horses
