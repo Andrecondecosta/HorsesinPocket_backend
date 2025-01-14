@@ -1,18 +1,18 @@
-<p>Olá,</p>
+<p>Hello,</p>
 
-<p>Você foi convidado a visualizar informações sobre o cavalo <strong><%= @horse.name %></strong>.</p>
+<p>You have been invited to view information about the horse <strong><%= @horse.name %></strong>.</p>
 
-<p>Detalhes do Cavalo:</p>
+<p>Horse Details:</p>
 <ul>
-  <li><strong>Nome:</strong> <%= @horse.name %></li>
-  <li><strong>Descrição:</strong> <%= @horse.description %></li>
+  <li><strong>Name:</strong> <%= @horse.name %></li>
+  <li><strong>Description:</strong> <%= @horse.description %></li>
 </ul>
 
 <% if @horse.images.any? %>
-  <p>Veja abaixo uma imagem do cavalo:</p>
+  <p>See an image of the horse below:</p>
   <img src="<%= @horse.images.first.url %>" alt="<%= @horse.name %>" style="width: 300px; height: auto;">
 <% else %>
-  <p>Este cavalo não possui imagens disponíveis no momento.</p>
+  <p>This horse does not have any images available at the moment.</p>
 <% end %>
 
-<p>Entre na aplicação para saber mais detalhes.</p>
+<p>Log in to the application for more details.</p>
