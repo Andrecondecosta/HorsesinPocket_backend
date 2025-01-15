@@ -3,6 +3,7 @@ include Rails.application.routes.url_helpers
 class Api::V1::HorsesController < ApplicationController
   skip_before_action :authorized, only: [:shared]
   before_action :set_horse, only: [:show, :update, :destroy, :delete_shares, :share_via_email, :share_via_link]
+  skip_before_action :authorized, only: [:public_test]
 
   # Lista todos os cavalos do usuário autenticado
   def index
@@ -266,6 +267,7 @@ class Api::V1::HorsesController < ApplicationController
 def received_horses
   @received_horses = Horse.joins(:user_horses)
                           .where(user_horses: { user_id: current_user.id })
+                          where.not(user_horses: { shared_by: current_user.id })
 
   render json: @received_horses.map { |horse|
     # Encontra a última transferência para o usuário atual
@@ -291,7 +293,9 @@ def received_horses
   }
 end
 
-
+def public_test
+  render json: { message: "Public test endpoint" }
+end
 
 
   private
