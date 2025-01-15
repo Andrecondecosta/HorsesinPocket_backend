@@ -267,7 +267,7 @@ class Api::V1::HorsesController < ApplicationController
 def received_horses
   @received_horses = Horse.joins(:user_horses)
                           .where(user_horses: { user_id: current_user.id })
-                          where.not(user_horses: { shared_by: current_user.id })
+                          .where.not(user_horses: { shared_by: current_user.id })
 
   render json: @received_horses.map { |horse|
     # Encontra a última transferência para o usuário atual
