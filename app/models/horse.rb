@@ -10,7 +10,7 @@ class Horse < ApplicationRecord
   accepts_nested_attributes_for :ancestors, allow_destroy: true
 
   validates :name, :age, :height_cm, :gender, :color, presence: true
-  validates :gender, inclusion: { in: ['gelding', 'mare', 'stallion'], message: "%{value} is not a valid gender" }
+  validates :gender, inclusion: { in: ['Gelding', 'Mare', 'Stallion'], message: "%{value} is not a valid gender" }
   validates :training_level, length: { maximum: 100 }
   validates :color, length: { maximum: 20 } # Ajuste do comprimento de cor para aceitar mais valores
   # Métodos auxiliares para acessar ancestrais específicos

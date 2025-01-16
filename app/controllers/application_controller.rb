@@ -1,5 +1,7 @@
 class ApplicationController < ActionController::API
   before_action :authorized
+  before_action :set_security_headers
+
 
   def authorized
     render json: { error: 'Unauthorized' }, status: :unauthorized unless logged_in?
@@ -40,6 +42,13 @@ class ApplicationController < ActionController::API
     unless current_user&.admin?
       render json: { error: 'Acesso negado' }, status: :forbidden
     end
+  end
+
+private
+
+  def set_security_headers
+    response.set_header('Cross-Origin-Opener-Policy', 'same-origin')
+    response.set_header('Cross-Origin-Embedder-Policy', 'require-corp')
   end
 
 end
