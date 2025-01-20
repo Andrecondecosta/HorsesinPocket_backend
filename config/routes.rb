@@ -28,18 +28,13 @@ Rails.application.routes.draw do
           get :confirm_email
         end
       end
+      post 'images_compress/compress', to: 'images_compress#compress'
       post 'videos_compress/compress', to: 'videos_compress#compress'
       post '/login', to: 'sessions#create'
       post '/signup', to: 'registrations#create'
       get '/profile', to: 'registrations#show'
       put '/update', to: 'registrations#update'
       get '/received', to: 'horses#received_horses'
-
-      resources :videos_compress, only: [:create] do
-        collection do
-          get :progress
-        end
-      end
 
       # Rotas administrativas
       resources :logs, only: [:index]

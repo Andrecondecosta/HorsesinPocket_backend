@@ -22,6 +22,9 @@ gem 'activestorage-cloudinary-service'
 gem 'dotenv-rails', groups: [:development, :test, :production]
 gem 'carrierwave'
 gem 'ruby-vips', '~> 2.0'
+gem 'mini_magick'
+gem 'mimemagic'
+gem 'marcel'
 
 
 # Use Redis adapter to run Action Cable in production
