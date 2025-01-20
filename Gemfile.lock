@@ -317,6 +317,7 @@ DEPENDENCIES
   dotenv-rails
   error_highlight (>= 0.4.0)
   jwt
+  marcel
   mimemagic
   mini_magick
   pg (>= 0.18, < 2.0)
