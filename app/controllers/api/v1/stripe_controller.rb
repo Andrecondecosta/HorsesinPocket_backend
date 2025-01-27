@@ -1,5 +1,5 @@
 # app/controllers/stripe_controller.rb
-class StripeController < ApplicationController
+class Api::V1::StripeController < ApplicationController
   def create_customer
     customer = Stripe::Customer.create({
       email: current_user.email,
