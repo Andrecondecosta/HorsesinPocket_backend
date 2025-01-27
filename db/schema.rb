@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_01_23_100614) do
+ActiveRecord::Schema[7.1].define(version: 2025_01_24_162655) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -94,6 +94,15 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_23_100614) do
     t.index ["horse_id"], name: "index_photos_on_horse_id"
   end
 
+  create_table "plans", force: :cascade do |t|
+    t.string "name"
+    t.decimal "price"
+    t.integer "max_horses"
+    t.integer "max_transfers"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
   create_table "shared_links", force: :cascade do |t|
     t.string "token", null: false
     t.bigint "horse_id", null: false
@@ -131,8 +140,17 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_23_100614) do
     t.string "address"
     t.string "gender"
     t.boolean "admin"
+    t.string "plan", default: "free"
+    t.integer "used_horses", default: 0
+    t.integer "used_transfers", default: 0
+    t.datetime "subscription_end"
+    t.integer "used_shares", default: 0
+    t.string "stripe_subscription_id"
+    t.string "stripe_customer_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
+    t.index ["stripe_customer_id"], name: "index_users_on_stripe_customer_id", unique: true
+    t.index ["stripe_subscription_id"], name: "index_users_on_stripe_subscription_id", unique: true
   end
 
   create_table "videos", force: :cascade do |t|

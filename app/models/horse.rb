@@ -17,7 +17,6 @@ class Horse < ApplicationRecord
   before_update :prevent_creator_change, if: :user_id_changed?
 
 
-
   def father
     ancestors.find_by(relation_type: 'father')
   end

@@ -7,3 +7,5 @@
 #   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
 #     MovieGenre.find_or_create_by!(name: genre_name)
 #   end
+Plan.create(name: "free", price: 0, max_horses: 2, max_transfers: 2)
+Plan.create(name: "premium", price: 5.0, max_horses: nil, max_transfers: nil)

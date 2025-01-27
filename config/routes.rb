@@ -28,6 +28,7 @@ Rails.application.routes.draw do
           get :confirm_email
         end
       end
+
       post 'images_compress/compress', to: 'images_compress#compress'
       post 'videos_compress/compress', to: 'videos_compress#compress'
       post '/login', to: 'sessions#create'
@@ -35,6 +36,18 @@ Rails.application.routes.draw do
       get '/profile', to: 'registrations#show'
       put '/update', to: 'registrations#update'
       get '/received', to: 'horses#received_horses'
+
+      # Rotas de planos
+      get 'get_user_plan', to: 'users#get_user_plan'
+      post '/change_plan', to: 'users#change_plan'
+
+      # Rotas do Stripe
+      post '/stripe/customers', to: 'stripe#create_customer'
+      # Rotas de autenticação
+      post '/webhooks/stripe', to: 'webhooks#receive'
+
+      # Rotas de subscrição
+      resources :subscriptions, only: [:create]
 
       # Rotas administrativas
       resources :logs, only: [:index]

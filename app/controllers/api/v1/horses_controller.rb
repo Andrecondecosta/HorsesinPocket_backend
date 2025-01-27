@@ -4,6 +4,8 @@ class Api::V1::HorsesController < ApplicationController
   skip_before_action :authorized, only: [:shared]
   before_action :set_horse, only: [:show, :update, :destroy, :delete_shares, :share_via_email, :share_via_link]
   skip_before_action :authorized, only: [:public_test]
+  before_action :check_plan_limits, only: [:create]
+  before_action :check_share_limits, only: [:share_via_email, :share_via_link]
 
   # Lista todos os cavalos do usuário autenticado
   def index
@@ -41,6 +43,7 @@ class Api::V1::HorsesController < ApplicationController
             user_id: current_user.id,
             created_at: Time.now
           )
+          current_user.increment!(:used_horses)
       process_ancestors(@horse, params[:horse][:ancestors_attributes])
 
       render json: @horse.as_json.merge({
@@ -175,6 +178,7 @@ class Api::V1::HorsesController < ApplicationController
 
 
   def share_via_email
+    check_share_limits # Verifica se o limite foi atingido
     Rails.logger.info("Iniciando compartilhamento do cavalo ID: #{@horse.id}, para email: #{params[:email]} por usuário: #{current_user.email}")
 
     recipient = User.find_by(email: params[:email])
@@ -198,6 +202,9 @@ class Api::V1::HorsesController < ApplicationController
 
         UserMailer.share_horse_email(current_user, recipient.email, @horse).deliver_later
 
+        # Incrementa o contador de partilhas do utilizador
+        current_user.increment!(:used_shares)
+
         # Criar logs de compartilhamento
         Log.create(action: 'shared', horse_name: @horse.name, recipient: recipient.email, user_id: current_user.id)
         Log.create(action: 'received', horse_name: @horse.name, recipient: current_user.email, user_id: recipient.id)
@@ -211,6 +218,7 @@ class Api::V1::HorsesController < ApplicationController
   end
 
   def share_via_link
+    check_share_limits # Verifica se o limite foi atingido
 
     # Cria um link compartilhável para o cavalo
     shared_link = @horse.shared_links.create!(
@@ -218,6 +226,10 @@ class Api::V1::HorsesController < ApplicationController
       expires_at: params[:expires_at],
       status: 'active'
     )
+
+
+    # Incrementa o contador de partilhas do utilizador
+    current_user.increment!(:used_shares)
 
     # Atualiza ou cria o vínculo entre o cavalo e o usuário atual
     user_horse = UserHorse.find_or_initialize_by(horse_id: @horse.id, user_id: current_user.id)
@@ -235,6 +247,7 @@ class Api::V1::HorsesController < ApplicationController
   rescue => e
     Rails.logger.error "Erro ao criar link de compartilhamento: #{e.message}"
     render json: { error: 'Erro ao criar link de compartilhamento. Tente novamente.' }, status: :internal_server_error
+    Rails.logger.info("Compartilhamento concluído. Total de shares realizados: #{current_user.used_shares}")
   end
 
 
@@ -271,7 +284,7 @@ class Api::V1::HorsesController < ApplicationController
 
 
 
-def received_horses
+  def received_horses
   @received_horses = Horse.joins(:user_horses)
                           .where(user_horses: { user_id: current_user.id })
                           .where.not(user_horses: { shared_by: current_user.id })
@@ -298,11 +311,11 @@ def received_horses
       sender_name: sender_user&.name || horse.creator&.name || 'Desconhecido'
     })
   }
-end
+  end
 
-def public_test
-  render json: { message: "Public test endpoint" }
-end
+  def public_test
+    render json: { message: "Public test endpoint" }
+  end
 
 
   private
@@ -452,4 +465,17 @@ end
     end
   end
 
-end
+    # Limitar criação de cavalos no plano gratuito
+    def check_plan_limits
+      if current_user.plan == "free" && current_user.used_horses >= 2
+        render json: { error: "Atingiu o limite de 2 cavalos do plano gratuito. Faça upgrade para continuar." }, status: :forbidden
+      end
+    end
+
+    # Limitar partilhas no plano gratuito
+    def check_share_limits
+      if current_user.plan == "free" && current_user.used_shares >= 4
+        render json: { error: "Atingiu o limite de 2 partilhas mensais do plano gratuito. Faça upgrade para continuar." }, status: :forbidden
+      end
+    end
+  end
