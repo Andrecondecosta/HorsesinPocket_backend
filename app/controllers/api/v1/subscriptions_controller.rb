@@ -1,4 +1,4 @@
-class SubscriptionsController < ApplicationController
+class Api::V1::SubscriptionsController < ApplicationController
   before_action :authenticate_user!
 
   def create_or_renew
