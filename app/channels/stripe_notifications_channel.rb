@@ -1,4 +1,4 @@
-lass StripeNotificationsChannel < ApplicationCable::Channel
+class StripeNotificationsChannel < ApplicationCable::Channel
   def subscribed
     stream_from "stripe_notifications_#{current_user.id}"  # Subscrição do usuário autenticado
   end
