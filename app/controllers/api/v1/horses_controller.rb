@@ -4,8 +4,7 @@ class Api::V1::HorsesController < ApplicationController
   skip_before_action :authorized, only: [:shared]
   before_action :set_horse, only: [:show, :update, :destroy, :delete_shares, :share_via_email, :share_via_link]
   skip_before_action :authorized, only: [:public_test]
-  before_action :check_plan_limits, only: [:create]
-  before_action :check_share_limits, only: [:share_via_email, :share_via_link]
+
 
   # Lista todos os cavalos do usuário autenticado
   def index
@@ -178,7 +177,6 @@ class Api::V1::HorsesController < ApplicationController
 
 
   def share_via_email
-    check_share_limits # Verifica se o limite foi atingido
     Rails.logger.info("Iniciando compartilhamento do cavalo ID: #{@horse.id}, para email: #{params[:email]} por usuário: #{current_user.email}")
 
     recipient = User.find_by(email: params[:email])
@@ -218,7 +216,6 @@ class Api::V1::HorsesController < ApplicationController
   end
 
   def share_via_link
-    check_share_limits # Verifica se o limite foi atingido
 
     # Cria um link compartilhável para o cavalo
     shared_link = @horse.shared_links.create!(
@@ -465,17 +462,4 @@ class Api::V1::HorsesController < ApplicationController
     end
   end
 
-    # Limitar criação de cavalos no plano gratuito
-    def check_plan_limits
-      if current_user.plan == "free" && current_user.used_horses >= 2
-        render json: { error: "Atingiu o limite de 2 cavalos do plano gratuito. Faça upgrade para continuar." }, status: :forbidden
-      end
-    end
-
-    # Limitar partilhas no plano gratuito
-    def check_share_limits
-      if current_user.plan == "free" && current_user.used_shares >= 4
-        render json: { error: "Atingiu o limite de 2 partilhas mensais do plano gratuito. Faça upgrade para continuar." }, status: :forbidden
-      end
-    end
   end

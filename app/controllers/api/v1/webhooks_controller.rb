@@ -1,82 +1,86 @@
 class Api::V1::WebhooksController < ActionController::API
+  before_action :set_stripe_api_key
   require 'stripe'
+
+  # 🔥 Definição dos planos disponíveis e seus respectivos `price_id` no Stripe
+  PLAN_PRICES = {
+    "Basic" => nil, # Plano gratuito (não precisa de `price_id` no Stripe)
+    "Plus" => "price_1Qo67GDCGWh9lQnCP4woIdoo",
+    "Premium" => "price_1Qo67nDCGWh9lQnCV35pyiym",
+    "Ultimate" => "price_1Qo68DDCGWh9lQnCaWeRF1YO"
+  }.freeze
 
   # Endpoint para troca de planos pelo frontend
   def change_plan
     new_plan = params[:plan]
+    price_id = PLAN_PRICES[new_plan] # Obtém o `price_id` correspondente
+    Rails.logger.info("Tentando mudar para o plano: #{new_plan}")
 
-    if new_plan == 'premium'
-      if current_user.stripe_customer_id.blank?
-        Rails.logger.error("Usuário #{current_user.email} não possui um stripe_customer_id configurado.")
-        render json: { error: "ID do cliente no Stripe não configurado." }, status: :unprocessable_entity
-        return
+    unless PLAN_PRICES.key?(new_plan)
+      Rails.logger.error("Plano inválido solicitado: #{new_plan}")
+      return render json: { error: "Plano inválido. Escolha entre: #{PLAN_PRICES.keys.join(', ')}" }, status: :unprocessable_entity
+    end
+
+    if new_plan == "Basic"
+      Rails.logger.info("Resetando contadores para o plano gratuito...")
+      begin
+        Stripe::Subscription.delete(current_user.stripe_subscription_id) if current_user.stripe_subscription_id
+        Rails.logger.info("Subscrição no Stripe cancelada com sucesso.")
+
+        current_user.update!(
+          plan: "Basic",
+          stripe_subscription_id: nil,
+          subscription_end: nil,
+          subscription_canceled: false, # 🔥 Resetando após a expiração real
+          used_horses: [current_user.used_horses, 2].min,
+          used_shares: [current_user.used_shares, 2].min
+        )
+        render json: { message: "Plano alterado para Gratuito." }, status: :ok
+      rescue Stripe::StripeError => e
+        Rails.logger.error("Erro ao cancelar subscrição no Stripe: #{e.message}")
+        render json: { error: "Erro no Stripe: #{e.message}" }, status: :unprocessable_entity
       end
-
-      Rails.logger.info("Iniciando criação de subscrição no Stripe para o usuário #{current_user.email}")
-
-      subscription = Stripe::Subscription.create(
-        customer: current_user.stripe_customer_id,
-        items: [{ price: 'price_1QlcqaDCGWh9lQnCdqRglpSD' }], # Substitua pelo ID do preço correto
-        expand: ['latest_invoice.payment_intent']
-      )
-
-      Rails.logger.info("Subscrição criada no Stripe: #{subscription.id}")
-
-      current_user.update!(
-        plan: 'premium',
-        stripe_subscription_id: subscription.id,
-        subscription_end: Time.at(subscription.current_period_end),
-        used_horses: 0,
-        used_shares: 0
-      )
-
-      render json: { message: "Subscrição para plano Premium ativada." }, status: :ok
-
-    elsif new_plan == 'free'
-      if current_user.stripe_subscription_id.present?
-        Rails.logger.info("Cancelando subscrição no Stripe para o usuário #{current_user.email}")
-
-        Stripe::Subscription.delete(current_user.stripe_subscription_id)
-      end
-
-      current_user.update!(
-        plan: 'free',
-        stripe_subscription_id: nil,
-        subscription_end: nil,
-        used_horses: [current_user.used_horses, 2].min,
-        used_shares: [current_user.used_shares, 2].min
-      )
-
-      render json: { message: "Plano alterado para Gratuito." }, status: :ok
 
     else
-      render json: { error: "Plano inválido." }, status: :unprocessable_entity
+      Rails.logger.info("Criando subscrição no Stripe para #{new_plan}...")
+      begin
+        subscription = Stripe::Subscription.create(
+          customer: current_user.stripe_customer_id,
+          items: [{ price: price_id }],
+          expand: ['latest_invoice.payment_intent']
+        )
+        Rails.logger.info("Subscrição criada com sucesso no Stripe. ID: #{subscription.id}")
+
+        current_user.update!(
+          plan: new_plan,
+          stripe_subscription_id: subscription.id,
+          subscription_end: Time.at(subscription.current_period_end),
+          subscription_canceled: false, # 🔥 Resetando após a expiração real
+          used_horses: 0,
+          used_shares: 0
+        )
+        render json: { message: "Subscrição para plano #{new_plan} ativada." }, status: :ok
+      rescue Stripe::StripeError => e
+        Rails.logger.error("Erro ao criar subscrição no Stripe: #{e.message}")
+        render json: { error: "Erro no Stripe: #{e.message}" }, status: :unprocessable_entity
+      end
     end
-  rescue Stripe::StripeError => e
-    Rails.logger.error("Erro no Stripe: #{e.message}")
-    render json: { error: "Erro no Stripe: #{e.message}" }, status: :unprocessable_entity
   end
-
-
 
   def stripe_webhook
     payload = request.body.read
     sig_header = request.env['HTTP_STRIPE_SIGNATURE']
 
     begin
-      # Valida o webhook usando o endpoint_secret do Stripe
       event = Stripe::Webhook.construct_event(payload, sig_header, ENV['STRIPE_WEBHOOK_SECRET'])
     rescue JSON::ParserError => e
       Rails.logger.error("Erro ao processar payload do Stripe: #{e.message}")
-      render json: { error: "Payload inválido" }, status: :bad_request
-      return
+      return render json: { error: "Payload inválido" }, status: :bad_request
     rescue Stripe::SignatureVerificationError => e
       Rails.logger.error("Erro de assinatura do Stripe: #{e.message}")
-      render json: { error: "Assinatura inválida" }, status: :bad_request
-      return
+      return render json: { error: "Assinatura inválida" }, status: :bad_request
     end
 
-    # Processa o evento com base no tipo
     case event['type']
     when 'customer.subscription.created'
       handle_subscription_created(event)
@@ -97,75 +101,77 @@ class Api::V1::WebhooksController < ActionController::API
 
   private
 
-  # --- HANDLERS PARA WEBHOOKS ---
-
-  # Associa o cliente criado no Stripe ao usuário no sistema
-  def handle_customer_created(event)
-    customer = event['data']['object']
-    user = User.find_by(email: customer['email']) # Associa com base no e-mail
-
-    if user
-      user.update!(stripe_customer_id: customer['id'])
-      Rails.logger.info("Cliente do Stripe associado ao utilizador #{user.email}")
-    else
-      Rails.logger.error("Utilizador não encontrado para o cliente #{customer['id']}")
-    end
-  end
-
-  # Lida com criação de subscrição
   def handle_subscription_created(event)
     subscription = event['data']['object']
     user = User.find_by(stripe_customer_id: subscription['customer'])
+    plan_name = get_plan_name_from_price(subscription['items']['data'][0]['price']['id'])
+
+    Rails.logger.info("🔥 RECEBIDO: Subscription Created - Cliente #{subscription['customer']}")
 
     if user
+      Rails.logger.info("🔄 Atualizando usuário #{user.email} para plano #{plan_name}")
+
       user.update!(
         stripe_subscription_id: subscription['id'],
-        plan: 'premium',
+        plan: plan_name,
         subscription_end: Time.at(subscription['current_period_end']),
-        used_horses: 0, # Reset contadores
+        subscription_canceled: false, # ✅ Resetando
+        used_horses: 0,
         used_shares: 0
       )
-      Rails.logger.info("Subscrição criada para o utilizador #{user.email}")
+      user.reload # 🔥 Garante que os dados foram salvos
+      Rails.logger.info("✅ Atualizado! subscription_canceled: #{user.subscription_canceled}")
     else
-      Rails.logger.error("Utilizador não encontrado para o cliente #{subscription['customer']}")
+      Rails.logger.error("❌ Usuário não encontrado para cliente #{subscription['customer']}")
     end
   end
 
-  # Lida com atualização de subscrição
   def handle_subscription_updated(event)
     subscription = event['data']['object']
     user = User.find_by(stripe_subscription_id: subscription['id'])
 
+    Rails.logger.info("🔥 RECEBIDO: Subscription Updated - Sub ID #{subscription['id']}")
+
     if user
-      user.update!(
-        plan: 'premium',
-        subscription_end: Time.at(subscription['current_period_end'])
-      )
-      Rails.logger.info("Subscrição atualizada para o utilizador #{user.email}")
+      new_plan = get_plan_name_from_price(subscription['items']['data'][0]['price']['id'])
+      Rails.logger.info("🔄 Atualizando #{user.email} para #{new_plan}")
+
+      begin
+        user.update!(
+          plan: new_plan,
+          subscription_end: Time.at(subscription['current_period_end']),
+          subscription_canceled: false # ✅ Resetando
+        )
+
+        user.reload # 🔥 Confirmação após update
+        Rails.logger.info("✅ Atualizado! subscription_canceled: #{user.subscription_canceled}")
+      rescue => e
+        Rails.logger.error("❌ ERRO AO ATUALIZAR USER: #{e.message}")
+      end
     else
-      Rails.logger.error("Utilizador não encontrado para a subscrição #{subscription['id']}")
+      Rails.logger.error("❌ Usuário não encontrado para a assinatura #{subscription['id']}")
     end
   end
 
-  # Lida com cancelamento de subscrição
+
+
+
+
   def handle_subscription_deleted(event)
     subscription = event['data']['object']
     user = User.find_by(stripe_subscription_id: subscription['id'])
 
     if user
       user.update!(
-        plan: 'free',
-        subscription_end: nil,
-        used_horses: [user.used_horses, 2].min, # Respeita os limites do plano
-        used_shares: [user.used_shares, 2].min
+        subscription_canceled: true # 🔥 Mantém como true até a expiração
       )
-      Rails.logger.info("Subscrição cancelada para o utilizador #{user.email}")
+      Rails.logger.info("❌ Assinatura cancelada para #{user.email}. subscription_canceled: true")
     else
-      Rails.logger.error("Utilizador não encontrado para a subscrição #{subscription['id']}")
+      Rails.logger.error("⚠️ Usuário não encontrado para a assinatura #{subscription['id']}")
     end
   end
 
-  # Lida com pagamentos bem-sucedidos
+
   def handle_payment_succeeded(event)
     invoice = event['data']['object']
     user = User.find_by(stripe_customer_id: invoice['customer'])
@@ -178,16 +184,29 @@ class Api::V1::WebhooksController < ActionController::API
     end
   end
 
-  # Lida com falhas de pagamento
   def handle_payment_failed(event)
     invoice = event['data']['object']
     user = User.find_by(stripe_customer_id: invoice['customer'])
 
     if user
-      Rails.logger.warn("Pagamento falhou para o utilizador #{user.email}")
-      user.update!(plan: 'free', subscription_end: nil)
+      Rails.logger.warn("⚠️ Pagamento falhou para #{user.email}. Voltando para o plano Basic.")
+
+      user.update!(
+        plan: "Basic",
+        subscription_end: nil,
+        stripe_subscription_id: nil
+      )
     else
-      Rails.logger.error("Utilizador não encontrado para o cliente #{invoice['customer']}")
+      Rails.logger.error("Usuário não encontrado para o cliente #{invoice['customer']}")
     end
+  end
+
+
+  def get_plan_name_from_price(price_id)
+    PLAN_PRICES.key(price_id) || "Basic" # Retorna "Basic" como padrão se não encontrar o preço
+  end
+
+  def set_stripe_api_key
+    Stripe.api_key = ENV['STRIPE_API_KEY']
   end
 end

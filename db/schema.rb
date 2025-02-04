@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_01_24_162655) do
+ActiveRecord::Schema[7.1].define(version: 2025_02_03_234211) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -147,9 +147,14 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_24_162655) do
     t.integer "used_shares", default: 0
     t.string "stripe_subscription_id"
     t.string "stripe_customer_id"
+    t.string "stripe_default_payment_method"
+    t.integer "max_horses"
+    t.integer "max_shares"
+    t.boolean "subscription_canceled", default: false, null: false
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
     t.index ["stripe_customer_id"], name: "index_users_on_stripe_customer_id", unique: true
+    t.index ["stripe_default_payment_method"], name: "index_users_on_stripe_default_payment_method", unique: true
     t.index ["stripe_subscription_id"], name: "index_users_on_stripe_subscription_id", unique: true
   end
 

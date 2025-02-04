@@ -11,8 +11,8 @@ class User < ApplicationRecord
   scope :active_subscriptions, -> { where("subscription_end > ?", Time.current) }
   scope :expired_subscriptions, -> { where("subscription_end <= ?", Time.current) }
 
-  validate :validate_horse_limit, if: -> { plan == "free" }
-  validate :validate_share_limit, if: -> { plan == "free" }
+  before_save :set_limits_based_on_plan
+  before_save :adjust_usage_counters
 
   def name
     "#{first_name} #{last_name}"
@@ -22,51 +22,32 @@ class User < ApplicationRecord
     self.admin
   end
 
-  def adjust_limits_for_plan_change
-    case plan
-    when "free"
-      Rails.logger.info "Resetando limites para o plano gratuito..."
-      update!(
-        used_horses: 0,  # Resetar contadores de cavalos
-        used_shares: 0   # Resetar contadores de partilhas
-      )
-    when "premium"
-      Rails.logger.info "Plano premium, sem ajustes necessários."
-      # No plano premium, os contadores permanecem inalterados
-    end
+  PLAN_LIMITS = {
+    "Basic" => { horses: 1, shares: 6 },
+    "Plus" => { horses: 2, shares: 40 },
+    "Premium" => { horses: 6, shares: 60 },
+    "Ultimate" => { horses: Float::INFINITY, shares: Float::INFINITY }
+  }.freeze
+
+  def set_limits_based_on_plan
+    limits = PLAN_LIMITS[self.plan] || PLAN_LIMITS["Basic"]
+    self.max_horses = limits[:horses]
+    self.max_shares = limits[:shares]
   end
 
-  def horse_limit
-    case plan
-    when "free"
-      2
-    when "premium"
-      Float::INFINITY
-    else
-      0
-    end
-  end
-
-  def share_limit
-    case plan
-    when "free"
-      4
-    when "premium"
-      Float::INFINITY
-    else
-      0
-    end
+  def adjust_usage_counters
+    self.used_horses = [used_horses || 0, max_horses || 0].min
+    self.used_shares = [used_shares || 0, max_shares || 0].min
   end
 
 
   def cancel_subscription!
     update!(
-      plan: "free",
+      plan: "Basic",
       stripe_subscription_id: nil,
-      subscription_end: nil,
-      used_horses: [used_horses, horse_limit].min,
-      used_shares: [used_shares, share_limit].min
+      subscription_end: nil
     )
+    adjust_usage_counters
   end
 
   def create_stripe_customer!
@@ -80,29 +61,36 @@ class User < ApplicationRecord
   def create_subscription!(price_id)
     raise "Stripe customer ID not set" if stripe_customer_id.blank?
 
+    trial_days = price_id == "price_1Qo68DDCGWh9lQnCaWeRF1YO" ? 90 : 0  # 🎁 3 meses grátis no Ultimate
+
     subscription = Stripe::Subscription.create(
       customer: stripe_customer_id,
-      items: [{ price: price_id }]
+      items: [{ price: price_id }],
+      trial_period_days: trial_days
     )
     update!(stripe_subscription_id: subscription.id, subscription_end: Time.current + 1.month)
   end
 
+  def stripe_default_payment_method
+    Stripe::Customer.retrieve(stripe_customer_id).invoice_settings.default_payment_method
+  end
+
   def self.reset_free_plan_limits
-    where(plan: "free").update_all(used_shares: 0)
-    Rails.logger.info "Limites de partilhas resetados para usuários no plano gratuito."
+    where(plan: "Basic").update_all(used_shares: 0, used_horses: 0)
+    Rails.logger.info "✅ Limites de partilhas e cavalos resetados para usuários no plano Basic."
   end
 
   private
 
   def validate_horse_limit
-    if used_horses > horse_limit
-      errors.add(:used_horses, "Você atingiu o limite de 2 cavalos no plano gratuito.")
+    if used_horses > max_horses
+      errors.add(:used_horses, "Você atingiu o limite de #{max_horses} cavalos no plano #{plan}.")
     end
   end
 
   def validate_share_limit
-    if used_shares > share_limit
-      errors.add(:used_shares, "Você atingiu o limite de 2 partilhas mensais no plano gratuito.")
+    if used_shares > max_shares
+      errors.add(:used_shares, "Você atingiu o limite de #{max_shares} partilhas no plano #{plan}.")
     end
   end
 end
