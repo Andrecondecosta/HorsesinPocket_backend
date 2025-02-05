@@ -12,7 +12,9 @@ class Api::V1::VideosCompressController < ApplicationController
       Rails.logger.info "Arquivo copiado para: #{permanent_path}"
 
       # Executar o comando FFmpeg
-      ffmpeg_command = "ffmpeg -i #{permanent_path} -vcodec libx264 -crf 28 #{output_path}"
+      ffmpeg_command = "ffmpeg -i '#{permanent_path}' -c:v libx264 -crf 30 -preset veryfast -b:v 1000k -maxrate 1200k -bufsize 2000k -vf 'scale=854:480' -c:a aac -b:a 64k -ar 32000 -ac 1 '#{output_path}'"
+
+
       Rails.logger.info "Executando comando: #{ffmpeg_command}"
 
       begin
