@@ -72,6 +72,8 @@ class User < ApplicationRecord
   end
 
   def stripe_default_payment_method
+    return nil if stripe_customer_id.blank?
+
     Stripe::Customer.retrieve(stripe_customer_id).invoice_settings.default_payment_method
   end
 

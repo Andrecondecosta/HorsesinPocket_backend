@@ -11,8 +11,10 @@ class Api::V1::RegistrationsController < ApplicationController
 
     if user.save  # ✅ Só cria o cliente Stripe depois de salvar o usuário no banco
       # Criar cliente Stripe para o usuário
-      customer = Stripe::Customer.create(email: user.email)
-      user.update!(stripe_customer_id: customer.id)
+      unless user.stripe_customer_id
+        customer = Stripe::Customer.create(email: user.email, name: user.name)
+        user.update!(stripe_customer_id: customer.id)
+      end
 
       # Criar assinatura no Ultimate com 3 meses grátis
       subscription = Stripe::Subscription.create(
