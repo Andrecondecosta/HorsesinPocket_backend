@@ -9,12 +9,30 @@ class Api::V1::RegistrationsController < ApplicationController
   def create
     user = User.new(user_params)
 
-    if user.save  # ✅ Só cria o cliente Stripe depois de salvar o usuário no banco
-      # Criar cliente Stripe para o usuário
-      unless user.stripe_customer_id
-        customer = Stripe::Customer.create(email: user.email, name: user.name)
-        user.update!(stripe_customer_id: customer.id)
+    if user.save
+      if params[:shared_token].present?
+        shared_link = SharedLink.find_by(token: params[:shared_token])
+
+        if shared_link
+          # Associa o cavalo ao usuário
+          UserHorse.create!(
+            horse_id: shared_link.horse_id,
+            user_id: user.id,
+            shared_by: shared_link.horse.user_id
+          )
+
+          # Marca o link como usado
+          shared_link.update!(status: 'used')
+        else
+          render json: { error: 'Shared token inválido' }, status: :unprocessable_entity
+          return
+        end
       end
+
+      # ✅ Só cria o cliente Stripe depois de salvar o usuário no banco
+      # Criar cliente Stripe para o usuário
+      customer = Stripe::Customer.create(email: user.email)
+      user.update!(stripe_customer_id: customer.id)
 
       # Criar assinatura no Ultimate com 3 meses grátis
       subscription = Stripe::Subscription.create(
@@ -31,11 +49,10 @@ class Api::V1::RegistrationsController < ApplicationController
         subscription_end: Time.at(subscription.current_period_end)
       )
 
-      # Envia e-mail de confirmação (se aplicável)
-      UserMailer.confirmation_email(user).deliver_later
 
       # Gera token JWT para autenticação
       token = encode_token({ user_id: user.id })
+
 
       render json: { token: token, message: "Usuário criado com sucesso! Você ganhou 3 meses grátis do Ultimate." }, status: :created
 

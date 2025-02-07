@@ -248,36 +248,35 @@ class Api::V1::HorsesController < ApplicationController
   end
 
 
-  def shared
-    shared_link = SharedLink.find_by!(token: params[:token])
+ def shared
+  shared_link = SharedLink.find_by!(token: params[:token])
 
-    if shared_link.used_at
-      render json: { error: 'Este link já foi utilizado.' }, status: :forbidden
-      return
-    elsif shared_link.expired?
-      render json: { error: 'Este link expirou.' }, status: :forbidden
-      return
-    end
-
-    unless current_user
-      # Redireciona para login com o token na URL
-      redirect_url = "/login?redirect=#{request.fullpath}"
-      render json: { message: 'É necessário fazer login para continuar.', redirect_to: redirect_url }, status: :unauthorized
-      return
-    end
-
-    # Adiciona o cavalo ao usuário autenticado
-    ActiveRecord::Base.transaction do
-      UserHorse.create!(
-        horse_id: shared_link.horse_id,
-        user_id: current_user.id,
-        shared_by: shared_link.horse.user_id
-      )
-      shared_link.update!(used_at: Time.current, status: 'used')
-    end
-
-    render json: { message: 'Cavalo adicionado aos recebidos com sucesso.' }, status: :ok
+  if shared_link.used_at
+    render json: { error: 'Este link já foi utilizado.' }, status: :forbidden
+    return
+  elsif shared_link.expired?
+    render json: { error: 'Este link expirou.' }, status: :forbidden
+    return
   end
+
+  unless current_user
+    # Se o usuário não estiver autenticado, redireciona para a página de boas-vindas
+    render json: { message: 'É necessário fazer login para continuar.', redirect_to: '/welcome' }, status: :unauthorized
+    return
+  end
+
+  # Adiciona o cavalo ao usuário autenticado
+  ActiveRecord::Base.transaction do
+    UserHorse.create!(
+      horse_id: shared_link.horse_id,
+      user_id: current_user.id,
+      shared_by: shared_link.horse.user_id
+    )
+    shared_link.update!(used_at: Time.current, status: 'used')
+  end
+
+  render json: { message: 'Cavalo adicionado aos recebidos com sucesso.' }, status: :ok
+end
 
 
 

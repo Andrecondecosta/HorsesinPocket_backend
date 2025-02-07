@@ -1,6 +1,5 @@
 class SharedLink < ApplicationRecord
   belongs_to :horse
-
   before_create :generate_token
 
   # Gera um token único antes de criar o link

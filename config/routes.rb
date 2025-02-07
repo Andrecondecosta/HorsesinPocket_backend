@@ -36,6 +36,7 @@ Rails.application.routes.draw do
       get '/profile', to: 'registrations#show'
       put '/update', to: 'registrations#update'
       get '/received', to: 'horses#received_horses'
+      get '/welcome', to: 'static_pages#welcome'
 
       # Rotas de pagamento
       resources :payments, only: [] do
