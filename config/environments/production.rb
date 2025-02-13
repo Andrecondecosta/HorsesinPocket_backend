@@ -94,7 +94,7 @@ Rails.application.configure do
   config.logger = Logger.new(STDOUT)
   config.logger.formatter = ::Logger::Formatter.new
 
-Rails.application.routes.default_url_options[:host] = 'horsehub.info'
+Rails.application.routes.default_url_options[:host] = 'https://www.horsehub.info'
 Rails.application.routes.default_url_options[:protocol] = 'https'
 
 end

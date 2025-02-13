@@ -216,26 +216,29 @@ class Api::V1::HorsesController < ApplicationController
   end
 
   def share_via_link
+    Rails.logger.info "Iniciando o compartilhamento do cavalo com ID: #{@horse.id}"
 
-    # Cria um link compartilhável para o cavalo
+    # Cria o link compartilhável
     shared_link = @horse.shared_links.create!(
       token: SecureRandom.urlsafe_base64(10),
       expires_at: params[:expires_at],
       status: 'active'
     )
 
+    Rails.logger.info "Link compartilhado criado com token: #{shared_link.token}"
 
-    # Incrementa o contador de partilhas do utilizador
+    # Incrementa o contador de partilhas
     current_user.increment!(:used_shares)
 
-    # Atualiza ou cria o vínculo entre o cavalo e o usuário atual
+    # Cria ou encontra o vínculo entre o cavalo e o usuário
     user_horse = UserHorse.find_or_initialize_by(horse_id: @horse.id, user_id: current_user.id)
     user_horse.shared_by ||= current_user.id
     user_horse.save!
 
-    # Gera o link compartilhável
-    link = "#{Rails.application.routes.default_url_options[:host]}/horses/shared/#{shared_link.token}"
+    Rails.logger.info "Cavalo associado ao usuário com sucesso."
 
+    # Gera o link compartilhado
+    link = "#{Rails.application.routes.default_url_options[:host]}/horses/shared/#{shared_link.token}"
 
     render json: {
       link: link,
@@ -244,39 +247,51 @@ class Api::V1::HorsesController < ApplicationController
   rescue => e
     Rails.logger.error "Erro ao criar link de compartilhamento: #{e.message}"
     render json: { error: 'Erro ao criar link de compartilhamento. Tente novamente.' }, status: :internal_server_error
-    Rails.logger.info("Compartilhamento concluído. Total de shares realizados: #{current_user.used_shares}")
   end
 
 
+
+ # Exemplo de Backend (Controller)
  def shared
-  shared_link = SharedLink.find_by!(token: params[:token])
+  Rails.logger.info "Iniciando requisição de compartilhamento com token: #{params[:token]}"
 
-  if shared_link.used_at
-    render json: { error: 'Este link já foi utilizado.' }, status: :forbidden
-    return
-  elsif shared_link.expired?
-    render json: { error: 'Este link expirou.' }, status: :forbidden
-    return
-  end
+  shared_link = SharedLink.find_by(token: params[:token])
 
-  unless current_user
-    # Se o usuário não estiver autenticado, redireciona para a página de boas-vindas
-    render json: { message: 'É necessário fazer login para continuar.', redirect_to: '/welcome' }, status: :unauthorized
+  if shared_link.nil?
+    Rails.logger.error "Link de compartilhamento não encontrado para o token: #{params[:token]}"
+    render json: { error: 'Link de compartilhamento não encontrado' }, status: :not_found
     return
   end
 
-  # Adiciona o cavalo ao usuário autenticado
+  Rails.logger.info "Link de compartilhamento encontrado: #{shared_link.inspect}"
+
+  # Verifica se o token foi usado antes, mas permite adicionar novamente
+  if shared_link.used_at.present? && shared_link.status == 'used'
+    Rails.logger.info "Link já foi usado, reativando o link..."
+    shared_link.update!(status: 'active', used_at: nil)  # Reativa o link, se necessário
+  end
+
+  # Realiza a associação do cavalo ao usuário
   ActiveRecord::Base.transaction do
+    Rails.logger.info "Associando cavalo ID #{shared_link.horse_id} ao usuário #{current_user.id}"
+
     UserHorse.create!(
       horse_id: shared_link.horse_id,
       user_id: current_user.id,
       shared_by: shared_link.horse.user_id
     )
+
+    # Marca o link como usado após a associação
     shared_link.update!(used_at: Time.current, status: 'used')
   end
 
+  Rails.logger.info "Cavalo associado com sucesso. Link marcado como 'used'."
   render json: { message: 'Cavalo adicionado aos recebidos com sucesso.' }, status: :ok
+rescue => e
+  Rails.logger.error "Erro ao processar o link de compartilhamento: #{e.message}"
+  render json: { error: 'Erro ao processar o link de compartilhamento. Tente novamente.' }, status: :internal_server_error
 end
+
 
 
 
