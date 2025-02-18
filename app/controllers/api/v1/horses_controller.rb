@@ -111,10 +111,12 @@ class Api::V1::HorsesController < ApplicationController
 
   # Deleta um cavalo
   def destroy
-    if @horse.user_id == current_user.id
-      # Criador apaga completamente o cavalo
-      ActiveRecord::Base.transaction do
-        # Apaga registros associados em massa
+    ActiveRecord::Base.transaction do
+      if @horse.user_id == current_user.id
+        # Criador do cavalo -> Apaga completamente
+        Rails.logger.info "Usuário #{current_user.id} é o criador. Deletando completamente o cavalo ID #{@horse.id}."
+
+        # Remove todos os registros associados
         UserHorse.where(horse_id: @horse.id).delete_all
         Ancestor.where(horse_id: @horse.id).delete_all
         SharedLink.where(horse_id: @horse.id).delete_all
@@ -134,15 +136,20 @@ class Api::V1::HorsesController < ApplicationController
           user_id: current_user.id,
           created_at: Time.current
         )
-      end
-      render json: { message: 'Cavalo deletado para todos, pois você é o criador.' }, status: :ok
-    else
-      # Outros usuários removem apenas seu vínculo e compartilhamentos subsequentes
-      ActiveRecord::Base.transaction do
+
+        render json: { message: 'Cavalo deletado para todos, pois você é o criador.' }, status: :ok
+      else
+        # Usuário apenas remove seu vínculo e os compartilhamentos subsequentes
+        Rails.logger.info "Usuário #{current_user.id} NÃO é o criador. Removendo vínculo do cavalo ID #{@horse.id}."
+
+        # Remove a relação do usuário com o cavalo
         UserHorse.where(horse_id: @horse.id, user_id: current_user.id).destroy_all
+
+        # Remove os compartilhamentos subsequentes feitos por esse usuário
         remove_shared_users(current_user.id)
+
+        render json: { message: 'Cavalo removido para você e os usuários subsequentes.' }, status: :ok
       end
-      render json: { message: 'Cavalo removido para você e os usuários subsequentes.' }, status: :ok
     end
   rescue => e
     Rails.logger.error "Erro ao deletar cavalo ou registros associados: #{e.message}"
@@ -222,7 +229,8 @@ class Api::V1::HorsesController < ApplicationController
     shared_link = @horse.shared_links.create!(
       token: SecureRandom.urlsafe_base64(10),
       expires_at: params[:expires_at],
-      status: 'active'
+      status: 'active',
+      shared_by: current_user.id
     )
 
     Rails.logger.info "Link compartilhado criado com token: #{shared_link.token}"
@@ -259,33 +267,36 @@ class Api::V1::HorsesController < ApplicationController
 
   if shared_link.nil?
     Rails.logger.error "Link de compartilhamento não encontrado para o token: #{params[:token]}"
-    render json: { error: 'Link de compartilhamento não encontrado' }, status: :not_found
-    return
+    return render json: { error: 'Link de compartilhamento não encontrado' }, status: :not_found
   end
 
   Rails.logger.info "Link de compartilhamento encontrado: #{shared_link.inspect}"
 
-  # Verifica se o token foi usado antes, mas permite adicionar novamente
-  if shared_link.used_at.present? && shared_link.status == 'used'
-    Rails.logger.info "Link já foi usado, reativando o link..."
-    shared_link.update!(status: 'active', used_at: nil)  # Reativa o link, se necessário
+  # Certifica-se de que o link está ativo antes de prosseguir
+  if shared_link.status == 'used'
+    Rails.logger.info "Link já foi usado anteriormente e está inativo."
+    return render json: { error: 'Este link já foi utilizado ou expirou.' }, status: :forbidden
   end
 
-  # Realiza a associação do cavalo ao usuário
   ActiveRecord::Base.transaction do
     Rails.logger.info "Associando cavalo ID #{shared_link.horse_id} ao usuário #{current_user.id}"
 
-    UserHorse.create!(
-      horse_id: shared_link.horse_id,
-      user_id: current_user.id,
-      shared_by: shared_link.horse.user_id
-    )
+    # Adiciona o cavalo ao 'Received Horses'
+    user_horse = UserHorse.find_or_initialize_by(horse_id: shared_link.horse_id, user_id: current_user.id)
 
-    # Marca o link como usado após a associação
-    shared_link.update!(used_at: Time.current, status: 'used')
+    if user_horse.persisted?
+      Rails.logger.info "O usuário #{current_user.id} já recebeu o cavalo ID #{shared_link.horse_id}. Nenhuma ação necessária."
+    else
+      user_horse.shared_by = shared_link.shared_by || shared_link.user_id # Garante que a hierarquia de compartilhamento seja mantida
+      user_horse.save!
+      Rails.logger.info "Cavalo ID #{shared_link.horse_id} adicionado com sucesso ao usuário #{current_user.id}."
+
+      # Agora que o cavalo foi realmente recebido, marcamos o link como "used"
+      shared_link.update!(used_at: Time.current, status: 'used')
+      Rails.logger.info "Link de compartilhamento marcado como 'used'."
+    end
   end
 
-  Rails.logger.info "Cavalo associado com sucesso. Link marcado como 'used'."
   render json: { message: 'Cavalo adicionado aos recebidos com sucesso.' }, status: :ok
 rescue => e
   Rails.logger.error "Erro ao processar o link de compartilhamento: #{e.message}"
@@ -294,35 +305,26 @@ end
 
 
 
-
-  def received_horses
+def received_horses
   @received_horses = Horse.joins(:user_horses)
                           .where(user_horses: { user_id: current_user.id })
-                          .where.not(user_horses: { shared_by: current_user.id })
+                          .where.not(user_id: current_user.id) # 🔹 Evita listar os próprios cavalos
+                          .distinct
 
   render json: @received_horses.map { |horse|
-    # Encontra a última transferência para o usuário atual
-    last_transfer_to_current_user = UserHorse.where(horse_id: horse.id, user_id: current_user.id)
-                                             .order(created_at: :desc)
-                                             .first
+    # 🔹 Pegamos a última transferência para ver quem compartilhou com o usuário atual
+    last_transfer = UserHorse.where(horse_id: horse.id, user_id: current_user.id)
+                             .order(created_at: :desc)
+                             .first
 
-    # Encontra o remetente da última transferência para o usuário atual
-    sender = if last_transfer_to_current_user
-               UserHorse.where(horse_id: horse.id)
-                        .where('created_at < ?', last_transfer_to_current_user.created_at)
-                        .order(created_at: :desc)
-                        .first
-             end
+    sender_user = last_transfer ? User.find_by(id: last_transfer.shared_by) : nil
 
-    sender_user = sender ? User.find(sender.user_id) : nil
-
-    # Prioriza o remetente e, caso não exista, exibe o nome do criador
     horse.as_json.merge({
       images: horse.images.map { |image| url_for(image) },
-      sender_name: sender_user&.name || horse.creator&.name || 'Desconhecido'
+      sender_name: sender_user&.name || 'Desconhecido'
     })
   }
-  end
+end
 
   def public_test
     render json: { message: "Public test endpoint" }
