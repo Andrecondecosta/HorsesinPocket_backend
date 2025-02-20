@@ -33,6 +33,10 @@ class Api::V1::HorsesController < ApplicationController
 
   # Cria um novo cavalo
   def create
+    if current_user.used_horses >= current_user.max_horses
+      return render json: { error: "❌ Você atingiu o limite de #{current_user.max_horses} cavalos no plano #{current_user.plan}. Faça upgrade para continuar." }, status: :forbidden
+    end
+
     @horse = current_user.horses.build(horse_params)
     if @horse.save
       Log.create(
@@ -184,6 +188,9 @@ class Api::V1::HorsesController < ApplicationController
 
 
   def share_via_email
+    if current_user.used_shares >= current_user.max_shares
+      return render json: { error: "❌ Você atingiu o limite de #{current_user.max_shares} partilhas no plano #{current_user.plan}. Faça upgrade para continuar." }, status: :forbidden
+    end
     Rails.logger.info("Iniciando compartilhamento do cavalo ID: #{@horse.id}, para email: #{params[:email]} por usuário: #{current_user.email}")
 
     recipient = User.find_by(email: params[:email])
@@ -223,6 +230,10 @@ class Api::V1::HorsesController < ApplicationController
   end
 
   def share_via_link
+    if current_user.used_shares >= current_user.max_shares
+      return render json: { error: "❌ Você atingiu o limite de #{current_user.max_shares} partilhas no plano #{current_user.plan}. Faça upgrade para continuar." }, status: :forbidden
+    end
+
     Rails.logger.info "Iniciando o compartilhamento do cavalo com ID: #{@horse.id}"
 
     # Cria o link compartilhável

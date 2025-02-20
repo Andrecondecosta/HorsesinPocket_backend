@@ -28,7 +28,8 @@ Rails.application.routes.draw do
           get :confirm_email
         end
       end
-
+      get "/user_status", to: "users#get_user_status"
+      get 'countries', to: 'countries#index'
       post 'images_compress/compress', to: 'images_compress#compress'
       post 'videos_compress/compress', to: 'videos_compress#compress'
       post '/login', to: 'sessions#create'

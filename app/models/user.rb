@@ -5,6 +5,9 @@ class User < ApplicationRecord
   devise :database_authenticatable, :registerable,
           :recoverable, :rememberable, :validatable
 
+  validates :first_name, :last_name, presence: true
+  validates :email, uniqueness: true
+
   validates :stripe_customer_id, uniqueness: true, allow_nil: true
   validates :stripe_subscription_id, uniqueness: true, allow_nil: true
 

@@ -114,6 +114,18 @@ class Api::V1::UsersController < ApplicationController
     end
   end
 
+  def get_user_status
+    user = current_user
+
+    render json: {
+      plan: current_user.plan,
+      used_horses: current_user.used_horses,
+      max_horses: current_user.max_horses || 0,  # 🔥 Garante que não seja nil
+      used_shares: current_user.used_shares,
+      max_shares: current_user.max_shares || 0   # 🔥 Garante que não seja nil
+    }
+  end
+
 
   private
 

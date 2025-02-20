@@ -26,6 +26,7 @@ gem 'mini_magick'
 gem 'mimemagic'
 gem 'marcel'
 gem 'stripe'
+gem 'countries'
 
 
 
