@@ -1,4 +1,6 @@
 class User < ApplicationRecord
+
+
   has_many :horses, dependent: :destroy
   has_many :user_horses, dependent: :destroy
 
@@ -14,7 +16,7 @@ class User < ApplicationRecord
   scope :active_subscriptions, -> { where("subscription_end > ?", Time.current) }
   scope :expired_subscriptions, -> { where("subscription_end <= ?", Time.current) }
 
-  before_save :set_limits_based_on_plan
+  before_validation :set_limits_based_on_plan
   before_save :adjust_usage_counters
 
   def name
@@ -29,18 +31,24 @@ class User < ApplicationRecord
     "Basic" => { horses: 1, shares: 6 },
     "Plus" => { horses: 2, shares: 40 },
     "Premium" => { horses: 6, shares: 60 },
-    "Ultimate" => { horses: Float::INFINITY, shares: Float::INFINITY }
+    "Ultimate" => { horses: 999_999, shares: 999_999 }
   }.freeze
 
   def set_limits_based_on_plan
+    puts "🔥 Chamando set_limits_based_on_plan para usuário #{email} com plano: #{plan}"
+
     limits = PLAN_LIMITS[self.plan] || PLAN_LIMITS["Basic"]
-    self.max_horses = limits[:horses]
-    self.max_shares = limits[:shares]
+    self.max_horses = limits[:horses] || 0
+    self.max_shares = limits[:shares] || 0
+
+    puts "🎯 Novo max_shares: #{self.max_shares}"
   end
 
+
+
   def adjust_usage_counters
-    self.used_horses = [used_horses || 0, max_horses || 0].min
-    self.used_shares = [used_shares || 0, max_shares || 0].min
+    self.used_horses = [[used_horses || 0, max_horses || 0].min, 0].max
+    self.used_shares = [[used_shares || 0, max_shares || 0].min, 0].max
   end
 
 

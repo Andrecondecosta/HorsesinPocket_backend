@@ -230,7 +230,8 @@ class Api::V1::HorsesController < ApplicationController
   end
 
   def share_via_link
-    if (current_user.used_shares || 0) >= (current_user.max_shares || 0)
+    if current_user.used_shares.to_i >= current_user.max_shares.to_i
+
       return render json: { error: "❌ Você atingiu o limite de #{current_user.max_shares} partilhas no plano #{current_user.plan}. Faça upgrade para continuar." }, status: :forbidden
     end
 
