@@ -134,24 +134,47 @@ class Api::V1::WebhooksController < ActionController::API
 
     if user
       new_plan = get_plan_name_from_price(subscription['items']['data'][0]['price']['id'])
-      Rails.logger.info("🔄 Atualizando #{user.email} para #{new_plan}")
+
+      # ✅ Pega a data de fim do trial diretamente da assinatura do Stripe
+      trial_end = subscription['trial_end'] ? Time.at(subscription['trial_end']) : nil
+      subscription_status = subscription['status'] # Ex: 'trialing', 'active', 'canceled'
+
+      Rails.logger.info("🔄 Atualizando #{user.email} para o plano #{new_plan}. Status da assinatura: #{subscription_status}")
 
       begin
-        user.update!(
-          plan: new_plan,
-          subscription_end: Time.at(subscription['current_period_end']),
-          subscription_canceled: false # ✅ Resetando
-        )
+        # 🚨 Se o período de trial acabou, migrar automaticamente para Basic
+        if trial_end && Time.current >= trial_end && subscription_status != 'active'
+          Rails.logger.info("⏳ O trial expirou para #{user.email}. Migrando automaticamente para o plano Basic.")
 
-        user.reload # 🔥 Confirmação após update
-        Rails.logger.info("✅ Atualizado! subscription_canceled: #{user.subscription_canceled}")
+          user.update!(
+            plan: "Basic",
+            stripe_subscription_id: nil,
+            subscription_end: nil
+          )
+
+          user.adjust_usage_counters
+          user.save!
+
+          Rails.logger.info("✅ Usuário migrado para o plano Basic após o término do trial.")
+        else
+          # 🔄 Atualiza normalmente se o trial ainda não acabou ou se a assinatura foi paga
+          user.update!(
+            plan: new_plan,
+            subscription_end: Time.at(subscription['current_period_end']),
+            subscription_canceled: false
+          )
+        end
+
+        user.reload
+        Rails.logger.info("✅ Assinatura atualizada com sucesso.")
       rescue => e
-        Rails.logger.error("❌ ERRO AO ATUALIZAR USER: #{e.message}")
+        Rails.logger.error("❌ ERRO AO ATUALIZAR USUÁRIO: #{e.message}")
       end
     else
       Rails.logger.error("❌ Usuário não encontrado para a assinatura #{subscription['id']}")
     end
   end
+
 
 
 

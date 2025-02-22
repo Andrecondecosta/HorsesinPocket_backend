@@ -18,6 +18,11 @@ class User < ApplicationRecord
 
   before_validation :set_limits_based_on_plan
   before_save :adjust_usage_counters
+  before_save :downcase_email
+
+  def downcase_email
+    self.email = email.downcase if email.present?
+  end
 
   def name
     "#{first_name} #{last_name}"
@@ -80,6 +85,30 @@ class User < ApplicationRecord
       trial_period_days: trial_days
     )
     update!(stripe_subscription_id: subscription.id, subscription_end: Time.current + 1.month)
+  end
+
+  def check_and_downgrade_plan
+    if subscription_end.present? && Time.current > subscription_end
+      Rails.logger.info("⏳ Assinatura expirada para #{email}. Migrando para o plano Basic.")
+
+      update!(
+        plan: "Basic",
+        stripe_subscription_id: nil,
+        subscription_end: nil
+      )
+
+      set_limits_based_on_plan
+      adjust_usage_counters
+      save!
+
+      Rails.logger.info("✅ #{email} migrado automaticamente para o plano Basic.")
+    end
+  end
+
+  def self.check_expired_subscriptions
+    expired_subscriptions.find_each do |user|
+      user.check_and_downgrade_plan
+    end
   end
 
   def stripe_default_payment_method
