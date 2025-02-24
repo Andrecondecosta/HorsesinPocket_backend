@@ -70,6 +70,7 @@ Rails.application.routes.draw do
         get '/dashboard', to: 'dashboard#index'
         get '/statistics', to: 'dashboard#statistics'
         get '/users', to: 'dashboard#users'
+        delete '/users/:id', to: 'dashboard#destroy_user'
         get '/horses', to: 'dashboard#horses'
         get '/logs', to: 'dashboard#logs'
       end
