@@ -273,46 +273,46 @@ class Api::V1::HorsesController < ApplicationController
 
  # Exemplo de Backend (Controller)
  def shared
-  Rails.logger.info "Iniciando requisição de compartilhamento com token: #{params[:token]}"
+  Rails.logger.info "Starting sharing request with token: #{params[:token]}"
 
   shared_link = SharedLink.find_by(token: params[:token])
 
   if shared_link.nil?
-    Rails.logger.error "Link de compartilhamento não encontrado para o token: #{params[:token]}"
-    return render json: { error: 'Link de compartilhamento não encontrado' }, status: :not_found
+    Rails.logger.error "Sharing link not found for token: #{params[:token]}"
+    return render json: { error: 'Sharing link not found' }, status: :not_found
   end
 
-  Rails.logger.info "Link de compartilhamento encontrado: #{shared_link.inspect}"
+  Rails.logger.info "Sharing link found: #{shared_link.inspect}"
 
-  # Certifica-se de que o link está ativo antes de prosseguir
+  # Ensure the link is active before proceeding
   if shared_link.status == 'used'
-    Rails.logger.info "Link já foi usado anteriormente e está inativo."
-    return render json: { error: 'Este link já foi utilizado ou expirou.' }, status: :forbidden
+    Rails.logger.info "Link has already been used and is inactive."
+    return render json: { error: 'This link has already been used or expired.' }, status: :forbidden
   end
 
   ActiveRecord::Base.transaction do
-    Rails.logger.info "Associando cavalo ID #{shared_link.horse_id} ao usuário #{current_user.id}"
+    Rails.logger.info "Associating horse ID #{shared_link.horse_id} with user #{current_user.id}"
 
-    # Adiciona o cavalo ao 'Received Horses'
+    # Add the horse to the 'Received Horses'
     user_horse = UserHorse.find_or_initialize_by(horse_id: shared_link.horse_id, user_id: current_user.id)
 
     if user_horse.persisted?
-      Rails.logger.info "O usuário #{current_user.id} já recebeu o cavalo ID #{shared_link.horse_id}. Nenhuma ação necessária."
+      Rails.logger.info "User #{current_user.id} has already received horse ID #{shared_link.horse_id}. No action necessary."
     else
-      user_horse.shared_by = shared_link.shared_by || shared_link.user_id # Garante que a hierarquia de compartilhamento seja mantida
+      user_horse.shared_by = shared_link.shared_by || shared_link.user_id # Ensure the sharing hierarchy is maintained
       user_horse.save!
-      Rails.logger.info "Cavalo ID #{shared_link.horse_id} adicionado com sucesso ao usuário #{current_user.id}."
+      Rails.logger.info "Horse ID #{shared_link.horse_id} successfully added to user #{current_user.id}."
 
-      # Agora que o cavalo foi realmente recebido, marcamos o link como "used"
+      # Now that the horse has been successfully received, mark the link as "used"
       shared_link.update!(used_at: Time.current, status: 'used')
-      Rails.logger.info "Link de compartilhamento marcado como 'used'."
+      Rails.logger.info "Sharing link marked as 'used'."
     end
   end
 
-  render json: { message: 'Cavalo adicionado aos recebidos com sucesso.' }, status: :ok
+  render json: { message: 'Horse successfully added to received.' }, status: :ok
 rescue => e
-  Rails.logger.error "Erro ao processar o link de compartilhamento: #{e.message}"
-  render json: { error: 'Erro ao processar o link de compartilhamento. Tente novamente.' }, status: :internal_server_error
+  Rails.logger.error "Error processing the sharing link: #{e.message}"
+  render json: { error: 'Error processing the sharing link. Please try again.' }, status: :internal_server_error
 end
 
 
