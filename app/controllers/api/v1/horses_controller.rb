@@ -2,7 +2,7 @@ include Rails.application.routes.url_helpers
 
 class Api::V1::HorsesController < ApplicationController
   skip_before_action :authorized, only: [:shared]
-  before_action :set_horse, only: [:show, :update, :destroy, :delete_shares, :share_via_email, :share_via_link]
+  before_action :set_horse, only: [:show, :update, :destroy, :delete_shares, :share_via_link]
   skip_before_action :authorized, only: [:public_test]
 
 
@@ -166,6 +166,7 @@ class Api::V1::HorsesController < ApplicationController
     ActiveRecord::Base.transaction do
       shared_users = User.joins(:user_horses)
                          .where(user_horses: { horse_id: @horse.id, shared_by: current_user.id })
+                         .where.not(id: current_user.id)
 
       Rails.logger.info "Registros na tabela user_horses para horse_id=#{@horse.id}, shared_by=#{current_user.id}:"
       Rails.logger.info UserHorse.where(horse_id: @horse.id, shared_by: current_user.id).pluck(:id, :user_id, :shared_by)
@@ -173,6 +174,11 @@ class Api::V1::HorsesController < ApplicationController
       Rails.logger.info "Usuários compartilhados diretamente pelo usuário #{current_user.id}: #{shared_users.map(&:id)}"
 
       shared_users.each do |user|
+        create_log(
+          action: 'deleted_share',
+          horse_name: @horse.name,
+          recipient: user.name,
+        )
         UserHorse.where(horse_id: @horse.id, user_id: user.id).destroy_all
         remove_shared_users(user.id)
       end
@@ -186,136 +192,144 @@ class Api::V1::HorsesController < ApplicationController
 
 
 
-
-  def share_via_email
-    if current_user.used_shares >= current_user.max_shares
-      return render json: { error: "❌ Você atingiu o limite de #{current_user.max_shares} partilhas no plano #{current_user.plan}. Faça upgrade para continuar." }, status: :forbidden
-    end
-    Rails.logger.info("Iniciando compartilhamento do cavalo ID: #{@horse.id}, para email: #{params[:email]} por usuário: #{current_user.email}")
-
-    recipient = User.find_by(email: params[:email])
-
-    if recipient.nil?
-      Rails.logger.info("Usuário não encontrado. Enviando convite para #{params[:email]}")
-      UserMailer.invite_new_user(current_user, params[:email], @horse).deliver_now
-      render json: { message: "Convite enviado para #{params[:email]}!" }, status: :ok
-    else
-      if @horse.users.include?(recipient)
-        Rails.logger.warn("Cavalo já compartilhado com #{recipient.email}")
-        render json: { error: 'Cavalo já compartilhado com este usuário' }, status: :unprocessable_entity
-      else
-        Rails.logger.info("Compartilhando cavalo com usuário existente: #{recipient.email}")
-        @horse.users << recipient
-
-        # Atualizar ou criar o vínculo com o valor correto de `shared_by`
-        user_horse = UserHorse.find_or_initialize_by(horse_id: @horse.id, user_id: recipient.id)
-        user_horse.shared_by = current_user.id
-        user_horse.save!
-
-        UserMailer.share_horse_email(current_user, recipient.email, @horse).deliver_later
-
-        # Incrementa o contador de partilhas do utilizador
-        current_user.increment!(:used_shares)
-
-        # Criar logs de compartilhamento
-        Log.create(action: 'shared', horse_name: @horse.name, recipient: recipient.email, user_id: current_user.id)
-        Log.create(action: 'received', horse_name: @horse.name, recipient: current_user.email, user_id: recipient.id)
-
-        render json: { message: "Cavalo compartilhado com sucesso com #{recipient.email}!" }, status: :ok
-      end
-    end
-  rescue => e
-    Rails.logger.error("Erro ao compartilhar cavalo: #{e.message}")
-    render json: { error: 'Erro ao compartilhar cavalo. Por favor, tente novamente.' }, status: :internal_server_error
-  end
-
   def share_via_link
     if current_user.used_shares.to_i >= current_user.max_shares.to_i
-
       return render json: { error: "❌ Você atingiu o limite de #{current_user.max_shares} partilhas no plano #{current_user.plan}. Faça upgrade para continuar." }, status: :forbidden
     end
 
-    Rails.logger.info "Iniciando o compartilhamento do cavalo com ID: #{@horse.id}"
+    Rails.logger.info "🚀 Iniciando compartilhamento do cavalo com ID: #{@horse.id}"
 
-    # Cria o link compartilhável
-    shared_link = @horse.shared_links.create!(
-      token: SecureRandom.urlsafe_base64(10),
-      expires_at: params[:expires_at],
-      status: 'active',
-      shared_by: current_user.id
-    )
+    ActiveRecord::Base.transaction do
+      # 🔒 Bloqueia a linha no banco de dados antes de verificar o link existente
+      recent_link = SharedLink.where(horse_id: @horse.id, shared_by: current_user.id)
+                              .where("created_at >= ?", 2.seconds.ago)
+                              .order(created_at: :desc)
+                              .limit(1)
+                              .lock("FOR UPDATE SKIP LOCKED") # 🔒 Evita concorrência
 
-    Rails.logger.info "Link compartilhado criado com token: #{shared_link.token}"
+      if recent_link.exists?
+        Rails.logger.info "⏳ Link recente encontrado: #{recent_link.first.token}. Usando esse link."
+        return render json: { link: "#{Rails.application.routes.default_url_options[:host]}/horses/shared/#{recent_link.first.token}" }, status: :ok
+      end
 
-    # Incrementa o contador de partilhas
-    current_user.increment!(:used_shares)
+      # 🔹 Criar novo link se não existir um recente
+      shared_link = @horse.shared_links.create!(
+        token: SecureRandom.urlsafe_base64(10),
+        expires_at: params[:expires_at],
+        status: 'active',
+        shared_by: current_user.id
+      )
 
-    # Cria ou encontra o vínculo entre o cavalo e o usuário
-    user_horse = UserHorse.find_or_initialize_by(horse_id: @horse.id, user_id: current_user.id)
-    user_horse.shared_by ||= current_user.id
-    user_horse.save!
+      Rails.logger.info "✅ Novo link criado: #{shared_link.token}"
 
-    Rails.logger.info "Cavalo associado ao usuário com sucesso."
+    # 🔹 Verifica se o último log foi criado há menos de 2 segundos
+    existing_log = Log.where(action: 'shared_via_link', horse_name: @horse.name, user_id: current_user.id)
+                      .where("recipient LIKE ?", "Pending%")
+                      .order(created_at: :desc)
+                      .first
 
-    # Gera o link compartilhado
-    link = "#{Rails.application.routes.default_url_options[:host]}/horses/shared/#{shared_link.token}"
+    if existing_log && existing_log.created_at >= 2.seconds.ago
+      Rails.logger.info "⏳ Log 'shared_via_link' já foi criado há menos de 2 segundos. Bloqueando duplicação."
+    else
+      new_log = create_log(
+        action: 'shared_via_link',
+        horse_name: @horse.name,
+        recipient: "Pending - Will be assigned when used"
+      )
+      Rails.logger.info "✅ Novo log criado com ID #{new_log.id} e recipient: #{new_log.recipient}"
+    end
 
-    render json: {
-      link: link,
-      expires_at: shared_link.expires_at
-    }, status: :created
+      current_user.increment!(:used_shares)
+
+      # 🔹 Garante que o cavalo está associado ao usuário
+      user_horse = UserHorse.find_or_initialize_by(horse_id: @horse.id, user_id: current_user.id)
+      user_horse.shared_by ||= current_user.id
+      user_horse.save!
+
+      Rails.logger.info "✅ Cavalo associado ao usuário com sucesso."
+
+      render json: { link: "#{Rails.application.routes.default_url_options[:host]}/horses/shared/#{shared_link.token}" }, status: :created
+    end
   rescue => e
-    Rails.logger.error "Erro ao criar link de compartilhamento: #{e.message}"
+    Rails.logger.error "❌ Erro ao criar link de compartilhamento: #{e.message}"
     render json: { error: 'Erro ao criar link de compartilhamento. Tente novamente.' }, status: :internal_server_error
   end
 
 
-
  # Exemplo de Backend (Controller)
  def shared
-  Rails.logger.info "Starting sharing request with token: #{params[:token]}"
+  Rails.logger.info "🟢 Starting sharing request with token: #{params[:token]}"
 
   shared_link = SharedLink.find_by(token: params[:token])
 
   if shared_link.nil?
-    Rails.logger.error "Sharing link not found for token: #{params[:token]}"
+    Rails.logger.error "❌ Sharing link not found for token: #{params[:token]}"
     return render json: { error: 'Sharing link not found' }, status: :not_found
   end
 
-  Rails.logger.info "Sharing link found: #{shared_link.inspect}"
+  Rails.logger.info "✅ Sharing link found: #{shared_link.inspect}"
 
-  # Ensure the link is active before proceeding
+  unless current_user
+    Rails.logger.error "❌ No authenticated user found! Redirecting to login."
+    return render json: { error: '⚠️ You need to log in to claim this horse.', redirect: '/welcome' }, status: :unauthorized
+  end
+
   if shared_link.status == 'used'
-    Rails.logger.info "Link has already been used and is inactive."
-    return render json: { error: 'This link has already been used or expired.' }, status: :forbidden
+    Rails.logger.info "⚠️ Link has already been used and is inactive."
+    return render json: { error: '⚠️ This link has already been used or expired.' }, status: :forbidden
   end
 
   ActiveRecord::Base.transaction do
-    Rails.logger.info "Associating horse ID #{shared_link.horse_id} with user #{current_user.id}"
+    Rails.logger.info "🔄 Associating horse ID #{shared_link.horse_id} with user #{current_user.id}"
 
-    # Add the horse to the 'Received Horses'
     user_horse = UserHorse.find_or_initialize_by(horse_id: shared_link.horse_id, user_id: current_user.id)
 
     if user_horse.persisted?
-      Rails.logger.info "User #{current_user.id} has already received horse ID #{shared_link.horse_id}. No action necessary."
+      Rails.logger.info "✅ User #{current_user.id} has already received horse ID #{shared_link.horse_id}. No action necessary."
     else
-      user_horse.shared_by = shared_link.shared_by || shared_link.user_id # Ensure the sharing hierarchy is maintained
-      user_horse.save!
-      Rails.logger.info "Horse ID #{shared_link.horse_id} successfully added to user #{current_user.id}."
+      sender_user = User.find_by(id: shared_link.shared_by)
+      sender_name = sender_user ? sender_user.name : "Unknown"
+      recipient_name = current_user.name
 
-      # Now that the horse has been successfully received, mark the link as "used"
+      user_horse.shared_by = shared_link.shared_by || shared_link.horse.user_id
+      user_horse.save!
+      Rails.logger.info "✅ Horse ID #{shared_link.horse_id} successfully added to user #{current_user.id}."
+
+      # 🔹 Atualizar o log "shared_via_link" para o nome do destinatário correto
+      log_to_update = Log.where(action: 'shared_via_link', horse_name: user_horse.horse.name, user_id: shared_link.shared_by)
+                         .where("recipient LIKE ?", "Pending%")
+                         .order(created_at: :desc)
+                         .limit(1)
+                         .lock("FOR UPDATE SKIP LOCKED") # 🔒 Evita concorrência
+                         .first
+
+      if log_to_update
+        Rails.logger.info "📝 Atualizando log 'shared_via_link' de 'Pending' para '#{recipient_name}'"
+        log_to_update.update!(recipient: recipient_name)
+        Rails.logger.info "✅ Log atualizado com sucesso: #{log_to_update.inspect}"
+      else
+        Rails.logger.warn "⚠️ Nenhum log 'shared_via_link' encontrado para atualizar!"
+      end
+
+      # 🔹 Criar um novo log indicando que o cavalo foi recebido
+      begin
+        Rails.logger.info "🔹 Criando log de 'received' para #{recipient_name}, enviado por #{sender_name}"
+        create_log(action: 'received', horse_name: user_horse.horse.name, recipient: sender_name)
+        Rails.logger.info "✅ Log de 'received' criado com sucesso!"
+      rescue => log_error
+        Rails.logger.error "❌ Erro ao criar log de 'received': #{log_error.message}"
+      end
+
       shared_link.update!(used_at: Time.current, status: 'used')
-      Rails.logger.info "Sharing link marked as 'used'."
+      Rails.logger.info "🔒 Sharing link marked as 'used'."
     end
   end
 
-  render json: { message: 'Horse successfully added to received.' }, status: :ok
+  render json: { message: '✅ Horse successfully added to received.' }, status: :ok
 rescue => e
-  Rails.logger.error "Error processing the sharing link: #{e.message}"
+  Rails.logger.error "❌ Error processing the sharing link: #{e.message}"
   render json: { error: 'Error processing the sharing link. Please try again.' }, status: :internal_server_error
 end
-
-
 
 def received_horses
   @received_horses = Horse.joins(:user_horses)

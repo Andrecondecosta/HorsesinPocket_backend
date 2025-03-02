@@ -44,6 +44,16 @@ class ApplicationController < ActionController::API
     end
   end
 
+  def create_log(action:, horse_name:, recipient:, user_id: nil)
+    Log.create!(
+      action: action,
+      horse_name: horse_name,
+      recipient: recipient,
+      user_id: user_id || current_user&.id, # Usa `user_id` se fornecido, senão tenta `current_user.id`
+      created_at: Time.current
+    )
+  end
+
 private
 
   def set_security_headers
