@@ -351,7 +351,6 @@ def received_horses
     })
   }
 end
-
 def shares
   @horse = Horse.find_by(id: params[:id])
 
@@ -359,9 +358,9 @@ def shares
     return render json: { error: "Cavalo não encontrado" }, status: :not_found
   end
 
-  # Buscar os usuários que receberam partilhas deste cavalo
+  # Buscar os usuários que receberam este cavalo **apenas** do usuário atual
   shared_users = User.joins(:user_horses)
-                     .where(user_horses: { horse_id: @horse.id })
+                     .where(user_horses: { horse_id: @horse.id, shared_by: current_user.id }) # 🔹 Filtro para apenas as partilhas do usuário atual
                      .where.not(id: current_user.id)
                      .select("users.id, users.first_name, users.last_name")
 
@@ -372,7 +371,6 @@ def shares
     }
   }}
 end
-
 
 
 
