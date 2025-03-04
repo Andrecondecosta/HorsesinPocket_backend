@@ -15,6 +15,7 @@ Rails.application.routes.draw do
 
         member do
           delete :delete_shares
+          get :shares
         end
       end
       resource :password, only: [] do

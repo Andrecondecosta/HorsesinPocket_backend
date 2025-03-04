@@ -352,6 +352,30 @@ def received_horses
   }
 end
 
+def shares
+  @horse = Horse.find_by(id: params[:id])
+
+  unless @horse
+    return render json: { error: "Cavalo não encontrado" }, status: :not_found
+  end
+
+  # Buscar os usuários que receberam partilhas deste cavalo
+  shared_users = User.joins(:user_horses)
+                     .where(user_horses: { horse_id: @horse.id })
+                     .where.not(id: current_user.id)
+                     .select("users.id, users.first_name, users.last_name")
+
+  render json: { shares: shared_users.map { |user|
+    {
+      user_id: user.id,
+      user_name: "#{user.first_name} #{user.last_name}".strip
+    }
+  }}
+end
+
+
+
+
   def public_test
     render json: { message: "Public test endpoint" }
   end
