@@ -288,8 +288,8 @@ class Api::V1::HorsesController < ApplicationController
       Rails.logger.info "✅ User #{current_user.id} has already received horse ID #{shared_link.horse_id}. No action necessary."
     else
       sender_user = User.find_by(id: shared_link.shared_by)
-      sender_name = sender_user ? sender_user.name : "Unknown"
-      recipient_name = current_user.name
+      sender_name = sender_user ? "#{sender_user.first_name} #{sender_user.last_name}".strip : "Unknown"
+      recipient_name = "#{current_user.first_name} #{current_user.last_name}".strip
 
       user_horse.shared_by = shared_link.shared_by || shared_link.horse.user_id
       user_horse.save!
@@ -300,7 +300,7 @@ class Api::V1::HorsesController < ApplicationController
                          .where("recipient LIKE ?", "Pending%")
                          .order(created_at: :desc)
                          .limit(1)
-                         .lock("FOR UPDATE SKIP LOCKED") # 🔒 Evita concorrência
+                         .lock("FOR UPDATE SKIP LOCKED")
                          .first
 
       if log_to_update
@@ -331,6 +331,7 @@ rescue => e
   render json: { error: 'Error processing the sharing link. Please try again.' }, status: :internal_server_error
 end
 
+
 def received_horses
   @received_horses = Horse.joins(:user_horses)
                           .where(user_horses: { user_id: current_user.id })
@@ -351,26 +352,29 @@ def received_horses
     })
   }
 end
-def shares
-  @horse = Horse.find_by(id: params[:id])
 
-  unless @horse
-    return render json: { error: "Cavalo não encontrado" }, status: :not_found
+  def shares
+    @horse = Horse.find_by(id: params[:id])
+
+    unless @horse
+      return render json: { error: "Cavalo não encontrado" }, status: :not_found
+    end
+
+    # Buscar os usuários que receberam este cavalo **apenas** do usuário atual
+    shared_users = User.joins(:user_horses)
+                      .where(user_horses: { horse_id: @horse.id, shared_by: current_user.id }) # 🔹 Filtro para apenas as partilhas do usuário atual
+                      .where.not(id: current_user.id)
+                      .select("users.id, users.first_name, users.last_name")
+
+    render json: { shares: shared_users.map { |user|
+      {
+        user_id: user.id,
+        user_name: "#{user.first_name} #{user.last_name}".strip
+      }
+    }}
   end
 
-  # Buscar os usuários que receberam este cavalo **apenas** do usuário atual
-  shared_users = User.joins(:user_horses)
-                     .where(user_horses: { horse_id: @horse.id, shared_by: current_user.id }) # 🔹 Filtro para apenas as partilhas do usuário atual
-                     .where.not(id: current_user.id)
-                     .select("users.id, users.first_name, users.last_name")
 
-  render json: { shares: shared_users.map { |user|
-    {
-      user_id: user.id,
-      user_name: "#{user.first_name} #{user.last_name}".strip
-    }
-  }}
-end
 
 
 
