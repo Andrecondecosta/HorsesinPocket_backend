@@ -179,7 +179,7 @@ class Api::V1::HorsesController < ApplicationController
           horse_name: @horse.name,
           recipient: user.name,
         )
-        UserHorse.where(horse_id: @horse.id, user_id: user.id).destroy_all
+        UserHorse.where(horse_id: @horse.id, user_id: user.id, shared_by: current_user.id).destroy_all
         remove_shared_users(user.id)
       end
     end
