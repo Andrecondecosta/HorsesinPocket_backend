@@ -164,30 +164,47 @@ class Api::V1::HorsesController < ApplicationController
 
   def delete_shares
     ActiveRecord::Base.transaction do
+      # 🔍 Filtrar apenas os utilizadores que receberam do `current_user`
       shared_users = User.joins(:user_horses)
                          .where(user_horses: { horse_id: @horse.id, shared_by: current_user.id })
-                         .where.not(id: current_user.id)
+                         .where(id: params[:user_ids]) # Remove apenas os IDs passados na requisição
 
-      Rails.logger.info "Registros na tabela user_horses para horse_id=#{@horse.id}, shared_by=#{current_user.id}:"
+      Rails.logger.info "🔍 Registros antes da remoção para horse_id=#{@horse.id}, shared_by=#{current_user.id}:"
       Rails.logger.info UserHorse.where(horse_id: @horse.id, shared_by: current_user.id).pluck(:id, :user_id, :shared_by)
 
-      Rails.logger.info "Usuários compartilhados diretamente pelo usuário #{current_user.id}: #{shared_users.map(&:id)}"
+      Rails.logger.info "🧑‍🤝‍🧑 Usuários que receberam o cavalo do usuário #{current_user.id}: #{shared_users.map(&:id)}"
 
       shared_users.each do |user|
+        # 🛠 Criar log antes da remoção
         create_log(
           action: 'deleted_share',
           horse_name: @horse.name,
-          recipient: user.name,
+          recipient: user.name
         )
-        UserHorse.where(horse_id: @horse.id, user_id: user.id, shared_by: current_user.id).destroy_all
-        remove_shared_users(user.id)
+
+        # 🛑 **Apenas remove a relação do `current_user`, sem apagar todas as partilhas**
+        removed_shares = UserHorse.where(horse_id: @horse.id, user_id: user.id, shared_by: current_user.id)
+
+        if removed_shares.exists?
+          removed_shares.destroy_all
+          Rails.logger.info "✅ Partilha removida para usuário #{user.id} pelo usuário #{current_user.id}"
+        else
+          Rails.logger.warn "⚠️ Nenhuma partilha encontrada para usuário #{user.id} compartilhada por #{current_user.id}"
+        end
+
+        # 🛑 **Verificar se o usuário ainda tem partilhas antes de apagar seus compartilhamentos subsequentes**
+        if UserHorse.where(horse_id: @horse.id, user_id: user.id).exists?
+          Rails.logger.info "🔄 Usuário #{user.id} ainda tem acesso ao cavalo, não removendo partilhas subsequentes."
+        else
+          remove_shared_users(user.id) # Remove partilhas apenas se o usuário perdeu o acesso ao cavalo
+        end
       end
     end
 
-    render json: { message: 'Compartilhamentos subsequentes removidos com sucesso.' }, status: :ok
+    render json: { message: 'Partilha removida com sucesso.' }, status: :ok
   rescue StandardError => e
-    Rails.logger.error "Erro ao remover compartilhamentos: #{e.message}"
-    render json: { error: 'Erro ao remover compartilhamentos subsequentes.' }, status: :internal_server_error
+    Rails.logger.error "❌ Erro ao remover partilha: #{e.message}"
+    render json: { error: 'Erro ao remover partilha.' }, status: :internal_server_error
   end
 
 
