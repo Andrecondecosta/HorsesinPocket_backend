@@ -16,6 +16,9 @@ class Horse < ApplicationRecord
   # Métodos auxiliares para acessar ancestrais específicos
   before_update :prevent_creator_change, if: :user_id_changed?
 
+  def shared_with?(user)
+    UserHorse.exists?(horse_id: self.id, user_id: user.id)
+  end
 
   def father
     ancestors.find_by(relation_type: 'father')

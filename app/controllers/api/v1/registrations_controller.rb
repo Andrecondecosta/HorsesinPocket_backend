@@ -24,7 +24,7 @@ class Api::V1::RegistrationsController < ApplicationController
       subscription = Stripe::Subscription.create(
         customer: user.stripe_customer_id,
         items: [{ price: "price_1Qo68DDCGWh9lQnCaWeRF1YO" }], # ID do plano Ultimate no Stripe
-        trial_period_days: 90, # 🔥 3 meses grátis
+        trial_period_days: 365, # 🔥 3 meses grátis
         expand: ["latest_invoice.payment_intent"]
       )
 

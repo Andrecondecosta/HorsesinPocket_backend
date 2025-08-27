@@ -1,4 +1,5 @@
 Rails.application.routes.draw do
+  get 'screenshots/create'
   namespace :api do
     namespace :v1 do
       resources :horses do
@@ -29,6 +30,12 @@ Rails.application.routes.draw do
           get :confirm_email
         end
       end
+      resources :user_horses, only: [] do
+        member do
+          post 'approve_screenshot'
+          post 'reject_screenshot'
+        end
+      end
       get "/user_status", to: "users#get_user_status"
       get 'countries', to: 'countries#index'
       post 'images_compress/compress', to: 'images_compress#compress'
@@ -39,6 +46,8 @@ Rails.application.routes.draw do
       put '/update', to: 'registrations#update'
       get '/received', to: 'horses#received_horses'
       get '/welcome', to: 'static_pages#welcome'
+      post '/screenshots', to: 'screenshots#create'
+
 
       # Rotas de pagamento
       resources :payments, only: [] do

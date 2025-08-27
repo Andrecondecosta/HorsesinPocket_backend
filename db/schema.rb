@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_02_19_195255) do
+ActiveRecord::Schema[7.1].define(version: 2025_08_27_175043) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -103,6 +103,15 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_19_195255) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "screenshot_events", force: :cascade do |t|
+    t.bigint "horse_id", null: false
+    t.bigint "user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["horse_id"], name: "index_screenshot_events_on_horse_id"
+    t.index ["user_id"], name: "index_screenshot_events_on_user_id"
+  end
+
   create_table "shared_links", force: :cascade do |t|
     t.string "token", null: false
     t.bigint "horse_id", null: false
@@ -134,6 +143,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_19_195255) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "shared_by"
+    t.string "status"
     t.index ["horse_id"], name: "index_user_horses_on_horse_id"
     t.index ["user_id"], name: "index_user_horses_on_user_id"
   end
@@ -192,6 +202,8 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_19_195255) do
   add_foreign_key "horses_users", "horses"
   add_foreign_key "horses_users", "users"
   add_foreign_key "photos", "horses"
+  add_foreign_key "screenshot_events", "horses"
+  add_foreign_key "screenshot_events", "users"
   add_foreign_key "shared_links", "horses"
   add_foreign_key "shared_links", "users"
   add_foreign_key "transfer_histories", "horses"
