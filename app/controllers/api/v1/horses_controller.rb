@@ -352,16 +352,15 @@ end
 def received_horses
   @received_horses = Horse.joins(:user_horses)
                           .where(user_horses: { user_id: current_user.id })
-                          .where.not(user_id: current_user.id) # 🔹 Evita listar os próprios cavalos
+                          .where.not(user_id: current_user.id)
                           .distinct
 
   render json: @received_horses.map { |horse|
-    # 🔹 Pegamos a última transferência para ver quem compartilhou com o usuário atual
-    last_transfer = UserHorse.where(horse_id: horse.id, user_id: current_user.id)
-                             .order(created_at: :desc)
-                             .first
+    user_horse = UserHorse.where(horse_id: horse.id, user_id: current_user.id)
+                          .order(created_at: :desc)
+                          .first
 
-    sender_user = last_transfer ? User.find_by(id: last_transfer.shared_by) : nil
+    sender_user = user_horse ? User.find_by(id: user_horse.shared_by) : nil
 
     horse.as_json.merge({
       images: horse.images.map { |image| url_for(image) },
