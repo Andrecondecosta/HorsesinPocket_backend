@@ -366,6 +366,7 @@ def received_horses
     horse.as_json.merge({
       images: horse.images.map { |image| url_for(image) },
       sender_name: sender_user&.name || 'Desconhecido'
+      status: user_horse&.status || 'active'
     })
   }
 end
