@@ -114,15 +114,37 @@ class Api::V1::UsersController < ApplicationController
     end
   end
 
+  def screenshot_alerts
+    # Busca todos os cavalos criados pelo utilizador atual que têm aprovações pendentes
+    horse_ids = Horse.where(user_id: current_user.id).pluck(:id)
+
+    pending_by_horse = UserHorse.where(horse_id: horse_ids, status: 'pending_approval')
+                                .where.not(user_id: current_user.id)
+                                .group_by(&:horse_id)
+
+    alerts = pending_by_horse.map do |horse_id, user_horses|
+      horse = Horse.find_by(id: horse_id)
+      next unless horse
+
+      {
+        horse_id: horse.id,
+        horse_name: horse.name,
+        alerts: user_horses.map { |uh| { user_horse_id: uh.id } }
+      }
+    end.compact
+
+    render json: { screenshot_alerts: alerts }
+  end
+
   def get_user_status
     user = current_user
 
     render json: {
       plan: current_user.plan,
       used_horses: current_user.used_horses,
-      max_horses: current_user.max_horses || 0,  # 🔥 Garante que não seja nil
+      max_horses: current_user.max_horses || 0,
       used_shares: current_user.used_shares,
-      max_shares: current_user.max_shares || 0   # 🔥 Garante que não seja nil
+      max_shares: current_user.max_shares || 0
     }
   end
 
