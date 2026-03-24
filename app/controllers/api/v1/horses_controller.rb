@@ -13,7 +13,7 @@ class Api::V1::HorsesController < ApplicationController
         color: horse.color,
         height_cm: horse.height_cm,
         images: horse.images.map { |image| url_for(image) },
-        is_owner: horse.user_id == current_user.id
+        is_owner: horse.user_id == current_user.id,
         created_at: horse.created_at
       }
     end
