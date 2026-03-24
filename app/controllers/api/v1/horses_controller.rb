@@ -14,6 +14,7 @@ class Api::V1::HorsesController < ApplicationController
         height_cm: horse.height_cm,
         images: horse.images.map { |image| url_for(image) },
         is_owner: horse.user_id == current_user.id
+        created_at: horse.created_at
       }
     end
     render json: horses, status: :ok

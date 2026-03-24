@@ -3,7 +3,12 @@ class Api::V1::RegistrationsController < ApplicationController
   before_action :authorized, except: [:create]
 
   def show
-    render json: current_user, status: :ok
+    render json: current_user.as_json(
+      only: [:id, :email, :first_name, :last_name, :birthdate, :phone_number,
+             :country, :gender, :admin, :plan, :used_horses, :used_transfers,
+             :used_shares, :max_horses, :max_shares, :subscription_end,
+             :subscription_canceled, :created_at, :updated_at]
+    ), status: :ok
   end
 
   def create
@@ -28,10 +33,10 @@ class Api::V1::RegistrationsController < ApplicationController
       )
 
       # Assign all Stripe data to the unsaved user object
-      user.stripe_customer_id     = customer.id
-      user.plan                   = "Ultimate"
+      user.stripe_customer_id    = customer.id
+      user.plan                  = "Ultimate"
       user.stripe_subscription_id = subscription.id
-      user.subscription_end       = Time.at(subscription.current_period_end)
+      user.subscription_end      = Time.at(subscription.current_period_end)
 
       # Persist the user with all data in a single write
       user.save!
@@ -79,7 +84,7 @@ class Api::V1::RegistrationsController < ApplicationController
       user_horse = UserHorse.create!(
         horse_id: shared_link.horse_id,
         user_id: user.id,
-        shared_by: shared_link.shared_by
+        shared_by: shared_link.shared_by # 🔥 Quem partilhou o cavalo, não necessariamente o dono original!
       )
       Rails.logger.info "✅ Cavalo #{shared_link.horse_id} associado a #{user.id}"
 
@@ -113,10 +118,3 @@ class Api::V1::RegistrationsController < ApplicationController
       Rails.logger.info "🔒 Token de partilha marcado como usado."
     end
   end
-
-  private
-
-  def user_params
-    params.require(:user).permit(:first_name, :last_name, :email, :password, :password_confirmation, :birthdate, :phone_number, :gender, :country)
-  end
-end

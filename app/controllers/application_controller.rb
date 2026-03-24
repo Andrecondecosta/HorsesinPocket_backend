@@ -40,7 +40,6 @@ class ApplicationController < ActionController::API
   def encode_token(payload)
     JWT.encode(payload.merge(exp: 30.days.from_now.to_i), Rails.application.credentials.secret_key_base)
   end
-
   def authorize_admin
     unless current_user&.admin?
       render json: { error: 'Acesso negado' }, status: :forbidden
@@ -52,7 +51,7 @@ class ApplicationController < ActionController::API
       action: action,
       horse_name: horse_name,
       recipient: recipient,
-      user_id: user_id || current_user&.id,
+      user_id: user_id || current_user&.id, # Usa `user_id` se fornecido, senão tenta `current_user.id`
       created_at: Time.current
     )
   end
@@ -61,7 +60,7 @@ private
 
   def set_security_headers
     response.set_header('Cross-Origin-Opener-Policy', 'same-origin')
-    response.set_header('Cross-Origin-Embedder-Policy', 'require-corp')
+    response.set_header('Cross-Origin-Embedder-Policy', 'unsafe-none')
   end
 
 end
