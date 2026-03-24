@@ -148,6 +148,31 @@ class Api::V1::HorsesController < ApplicationController
     }, status: :ok
   end
 
+  # GET /received
+  def received_horses
+    received = Horse.joins(:user_horses)
+                    .where(user_horses: { user_id: current_user.id })
+                    .where.not(horses: { user_id: current_user.id })
+                    .distinct
+
+    render json: received.map { |horse|
+      user_horse = UserHorse.where(horse_id: horse.id, user_id: current_user.id)
+                            .order(created_at: :desc)
+                            .first
+
+      sender_user = user_horse ? User.find_by(id: user_horse.shared_by) : nil
+      sender_name = sender_user ? "#{sender_user.first_name} #{sender_user.last_name}".strip : 'Unknown'
+
+      {
+        id: horse.id,
+        name: horse.name,
+        images: horse.images.map { |image| url_for(image) },
+        sender_name: sender_name,
+        status: user_horse&.status || 'active'
+      }
+    }, status: :ok
+  end
+
   # GET /horses/shared/:token
   def shared
     shared_link = SharedLink.find_by(token: params[:token])
@@ -175,7 +200,7 @@ class Api::V1::HorsesController < ApplicationController
     end
 
     ActiveRecord::Base.transaction do
-      user_horse = UserHorse.create!(
+      UserHorse.create!(
         horse_id: horse.id,
         user_id: current_user.id,
         shared_by: shared_link.shared_by
