@@ -49,7 +49,6 @@ Rails.application.routes.draw do
       get '/welcome', to: 'static_pages#welcome'
       post '/screenshots', to: 'screenshots#create'
 
-
       # Rotas de pagamento
       resources :payments, only: [] do
         post "create_setup_intent", on: :collection
