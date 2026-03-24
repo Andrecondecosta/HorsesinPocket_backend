@@ -25,6 +25,8 @@ class ApplicationController < ActionController::API
       token = auth_header.split(' ')[1]
       begin
         JWT.decode(token, Rails.application.credentials.secret_key_base, true, algorithm: 'HS256')
+      rescue JWT::ExpiredSignature
+        nil
       rescue JWT::DecodeError
         nil
       end
@@ -36,8 +38,9 @@ class ApplicationController < ActionController::API
   end
 
   def encode_token(payload)
-    JWT.encode(payload, Rails.application.credentials.secret_key_base)
+    JWT.encode(payload.merge(exp: 30.days.from_now.to_i), Rails.application.credentials.secret_key_base)
   end
+
   def authorize_admin
     unless current_user&.admin?
       render json: { error: 'Acesso negado' }, status: :forbidden
@@ -49,7 +52,7 @@ class ApplicationController < ActionController::API
       action: action,
       horse_name: horse_name,
       recipient: recipient,
-      user_id: user_id || current_user&.id, # Usa `user_id` se fornecido, senão tenta `current_user.id`
+      user_id: user_id || current_user&.id,
       created_at: Time.current
     )
   end

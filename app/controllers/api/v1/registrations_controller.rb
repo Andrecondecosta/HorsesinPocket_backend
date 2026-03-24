@@ -9,42 +9,51 @@ class Api::V1::RegistrationsController < ApplicationController
   def create
     user = User.new(user_params)
 
-    if user.save
+    # Validate before any external calls — fail fast with clear errors
+    unless user.valid?
+      return render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
+    end
+
+    begin
+      # Call Stripe BEFORE persisting the user.
+      # If Stripe is unavailable, nothing is written to the DB
+      # and the user can safely retry with the same email.
+      customer = Stripe::Customer.create(email: user.email)
+
+      subscription = Stripe::Subscription.create(
+        customer: customer.id,
+        items: [{ price: "price_1Qo68DDCGWh9lQnCaWeRF1YO" }],
+        trial_period_days: 365,
+        expand: ["latest_invoice.payment_intent"]
+      )
+
+      # Assign all Stripe data to the unsaved user object
+      user.stripe_customer_id     = customer.id
+      user.plan                   = "Ultimate"
+      user.stripe_subscription_id = subscription.id
+      user.subscription_end       = Time.at(subscription.current_period_end)
+
+      # Persist the user with all data in a single write
+      user.save!
+
       Rails.logger.info "✅ Novo utilizador registado: #{user.first_name} #{user.last_name}"
 
       if params[:shared_token].present?
         process_shared_horse(user, params[:shared_token])
       end
 
-      # ✅ Criar cliente Stripe depois de salvar o usuário no banco
-      customer = Stripe::Customer.create(email: user.email)
-      user.update!(stripe_customer_id: customer.id)
-
-      # Criar assinatura Ultimate com 3 meses grátis
-      subscription = Stripe::Subscription.create(
-        customer: user.stripe_customer_id,
-        items: [{ price: "price_1Qo68DDCGWh9lQnCaWeRF1YO" }], # ID do plano Ultimate no Stripe
-        trial_period_days: 365, # 🔥 3 meses grátis
-        expand: ["latest_invoice.payment_intent"]
-      )
-
-      # Atualizar usuário com os detalhes da assinatura
-      user.update!(
-        plan: "Ultimate",
-        stripe_subscription_id: subscription.id,
-        subscription_end: Time.at(subscription.current_period_end)
-      )
-
-      # Gera token JWT para autenticação
       token = encode_token({ user_id: user.id })
 
       render json: { token: token, message: "Usuário criado com sucesso! Você ganhou 3 meses grátis do Ultimate." }, status: :created
-    else
-      render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
-    end
 
-  rescue Stripe::StripeError => e
-    render json: { error: "Erro no Stripe: #{e.message}" }, status: :unprocessable_entity
+    rescue Stripe::StripeError => e
+      Rails.logger.error "❌ Stripe error during registration for #{user.email}: #{e.message}"
+      render json: { error: "Registration failed due to a payment service error. Please try again." }, status: :service_unavailable
+
+    rescue ActiveRecord::RecordInvalid => e
+      Rails.logger.error "❌ DB error during registration for #{user.email}: #{e.message}"
+      render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+    end
   end
 
   def update
@@ -70,7 +79,7 @@ class Api::V1::RegistrationsController < ApplicationController
       user_horse = UserHorse.create!(
         horse_id: shared_link.horse_id,
         user_id: user.id,
-        shared_by: shared_link.shared_by # 🔥 Quem partilhou o cavalo, não necessariamente o dono original!
+        shared_by: shared_link.shared_by
       )
       Rails.logger.info "✅ Cavalo #{shared_link.horse_id} associado a #{user.id}"
 

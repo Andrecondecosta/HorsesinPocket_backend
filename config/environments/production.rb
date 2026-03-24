@@ -80,6 +80,8 @@ Rails.application.configure do
   config.hosts << "horsesinpocket-frontend.onrender.com"
   config.hosts << "localhost"
   config.hosts << "localhost:3000"
+  config.hosts << "horsehub.info"
+  config.hosts << "www.horsehub.info"
 
 
   # Skip DNS rebinding protection for specific paths.
