@@ -304,9 +304,14 @@ class Api::V1::HorsesController < ApplicationController
   private
 
   def set_horse
-    @horse = current_user.horses.find_by(id: params[:id])
-    render json: { error: "Horse not found" }, status: :not_found unless @horse
-  end
+  @horse = Horse.left_joins(:user_horses)
+                .where(
+                  'horses.user_id = :user_id OR user_horses.user_id = :user_id',
+                  user_id: current_user.id
+                )
+                .find_by(id: params[:id])
+  render json: { error: "Horse not found" }, status: :not_found unless @horse
+end
 
   def horse_params
     params.require(:horse).permit(
