@@ -1,0 +1,18 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "K34V3J3RV4.com.horsehub.app",
+        "paths": [
+          "/shared/*",
+          "/horses/*"
+        ],
+        "components": [
+          { "/": "/shared/*", "comment": "Shared horses" },
+          { "/": "/horses/*", "comment": "Horses list" }
+        ]
+      }
+    ]
+  }
+}

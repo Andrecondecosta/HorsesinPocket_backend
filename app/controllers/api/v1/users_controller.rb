@@ -148,6 +148,22 @@ class Api::V1::UsersController < ApplicationController
     }
   end
 
+  def destroy_account
+    user = current_user
+
+    # Delete all user's horses and related data
+    user.horses.destroy_all
+
+    # Delete device tokens
+    DeviceToken.where(user_id: user.id).destroy_all if defined?(DeviceToken)
+
+    # Delete the user account
+    user.destroy
+
+    render json: { message: "Account deleted successfully" }, status: :ok
+  rescue => e
+    render json: { error: "Error deleting account: #{e.message}" }, status: :unprocessable_entity
+  end
 
   private
 

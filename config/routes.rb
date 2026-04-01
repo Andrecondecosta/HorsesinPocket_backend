@@ -1,3 +1,4 @@
+
 Rails.application.routes.draw do
   get 'screenshots/create'
   namespace :api do
@@ -47,6 +48,11 @@ Rails.application.routes.draw do
       get '/received', to: 'horses#received_horses'
       get '/welcome', to: 'static_pages#welcome'
       post '/screenshots', to: 'screenshots#create'
+      delete '/delete_account', to: 'users#destroy_account'
+
+      # Push notification device tokens
+      post   '/device_tokens', to: 'device_tokens#create'
+      delete '/device_tokens', to: 'device_tokens#destroy'
 
       # Rotas de pagamento
       resources :payments, only: [] do
@@ -61,7 +67,6 @@ Rails.application.routes.draw do
 
       # Rotas do Stripe
       post '/stripe/customers', to: 'stripe#create_customer'
-      # Rotas de autenticação
       post '/webhooks/stripe', to: 'webhooks#receive'
 
       resources :subscriptions, only: [] do

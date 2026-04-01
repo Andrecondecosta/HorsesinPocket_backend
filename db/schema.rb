@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_08_27_191325) do
+ActiveRecord::Schema[7.1].define(version: 2026_03_27_103157) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -52,6 +52,18 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_27_191325) do
     t.datetime "updated_at", null: false
     t.index ["horse_id", "relation_type"], name: "index_ancestors_on_horse_id_and_relation_type", unique: true
     t.index ["horse_id"], name: "index_ancestors_on_horse_id"
+  end
+
+  create_table "device_tokens", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "token", null: false
+    t.string "platform", default: "ios"
+    t.boolean "active", default: true
+    t.datetime "last_used_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["token"], name: "index_device_tokens_on_token", unique: true
+    t.index ["user_id"], name: "index_device_tokens_on_user_id"
   end
 
   create_table "horses", force: :cascade do |t|
@@ -199,6 +211,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_27_191325) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "ancestors", "horses"
+  add_foreign_key "device_tokens", "users"
   add_foreign_key "horses", "users"
   add_foreign_key "horses_users", "horses"
   add_foreign_key "horses_users", "users"

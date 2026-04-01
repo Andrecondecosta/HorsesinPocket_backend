@@ -3,6 +3,7 @@ class User < ApplicationRecord
 
   has_many :horses, dependent: :destroy
   has_many :user_horses, dependent: :destroy
+  has_many :device_tokens, dependent: :destroy
 
   devise :database_authenticatable, :registerable,
           :recoverable, :rememberable, :validatable
