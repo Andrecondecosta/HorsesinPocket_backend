@@ -151,32 +151,24 @@ class Api::V1::UsersController < ApplicationController
 def destroy_account
   user = current_user
 
-  # Delete all logs
-  Log.where(user_id: user.id).delete_all if defined?(Log)
-
-  # Delete shared links
-  SharedLink.where(user_id: user.id).delete_all if defined?(SharedLink)
-
-  # Delete user_horses (received horses)
-  UserHorse.where(user_id: user.id).delete_all if defined?(UserHorse)
-
-  # Delete screenshots
-  Screenshot.where(user_id: user.id).delete_all if defined?(Screenshot)
-
-  # Delete device tokens
-  DeviceToken.where(user_id: user.id).delete_all if defined?(DeviceToken)
-
-  # Delete all user's horses and related data
-  user.horses.destroy_all
-
-  # Delete the user account
-  user.destroy!
+  ActiveRecord::Base.transaction do
+    Log.where(user_id: user.id).delete_all if defined?(Log)
+    SharedLink.where(user_id: user.id).delete_all if defined?(SharedLink)
+    SharedLink.where(horse_id: user.horses.pluck(:id)).delete_all if defined?(SharedLink) && user.horses.any?
+    UserHorse.where(user_id: user.id).delete_all if defined?(UserHorse)
+    UserHorse.where(horse_id: user.horses.pluck(:id)).delete_all if defined?(UserHorse) && user.horses.any?
+    Screenshot.where(user_id: user.id).delete_all if defined?(Screenshot)
+    DeviceToken.where(user_id: user.id).delete_all if defined?(DeviceToken)
+    user.horses.each { |horse| horse.ancestors.delete_all }
+    user.horses.destroy_all
+    user.destroy!
+  end
 
   render json: { message: "Account deleted successfully" }, status: :ok
 rescue => e
+  Rails.logger.error "DELETE ACCOUNT ERROR: #{e.message}"
   render json: { error: "Error deleting account: #{e.message}" }, status: :unprocessable_entity
 end
-
   private
 
   def reset_counters_for_free_plan
