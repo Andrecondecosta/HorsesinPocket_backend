@@ -147,7 +147,6 @@ class Api::V1::UsersController < ApplicationController
       max_shares: current_user.max_shares || 0
     }
   end
-
 def destroy_account
   user = current_user
 
@@ -155,7 +154,6 @@ def destroy_account
     Log.where(user_id: user.id).delete_all if defined?(Log)
     UserHorse.where(user_id: user.id).delete_all if defined?(UserHorse)
     Screenshot.where(user_id: user.id).delete_all if defined?(Screenshot)
-    DeviceToken.where(user_id: user.id).delete_all if defined?(DeviceToken)
 
     horse_ids = user.horses.pluck(:id)
     if horse_ids.any?
