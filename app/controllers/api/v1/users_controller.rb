@@ -147,7 +147,6 @@ class Api::V1::UsersController < ApplicationController
       max_shares: current_user.max_shares || 0
     }
   end
-
 def destroy_account
   user = current_user
 
@@ -163,8 +162,14 @@ def destroy_account
 
     UserHorse.where(user_id: user.id).delete_all
 
-    user.horses.destroy_all
-    user.destroy!
+    user.horses.each do |horse|
+      horse.ancestors.delete_all
+      horse.images.purge
+      horse.videos.purge
+      horse.delete
+    end
+
+    user.delete
   end
 
   render json: { message: "Account deleted successfully" }, status: :ok
