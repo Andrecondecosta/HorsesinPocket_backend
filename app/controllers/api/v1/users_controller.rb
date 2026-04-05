@@ -153,13 +153,16 @@ def destroy_account
 
   ActiveRecord::Base.transaction do
     Log.where(user_id: user.id).delete_all if defined?(Log)
-    SharedLink.where(user_id: user.id).delete_all if defined?(SharedLink)
-    SharedLink.where(horse_id: user.horses.pluck(:id)).delete_all if defined?(SharedLink) && user.horses.any?
     UserHorse.where(user_id: user.id).delete_all if defined?(UserHorse)
-    UserHorse.where(horse_id: user.horses.pluck(:id)).delete_all if defined?(UserHorse) && user.horses.any?
     Screenshot.where(user_id: user.id).delete_all if defined?(Screenshot)
     DeviceToken.where(user_id: user.id).delete_all if defined?(DeviceToken)
-    user.horses.each { |horse| horse.ancestors.delete_all }
+
+    horse_ids = user.horses.pluck(:id)
+    if horse_ids.any?
+      SharedLink.where(horse_id: horse_ids).delete_all if defined?(SharedLink)
+      UserHorse.where(horse_id: horse_ids).delete_all if defined?(UserHorse)
+    end
+
     user.horses.destroy_all
     user.destroy!
   end
