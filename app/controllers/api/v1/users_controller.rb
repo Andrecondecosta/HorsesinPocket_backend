@@ -146,7 +146,9 @@ class Api::V1::UsersController < ApplicationController
       used_shares: current_user.used_shares,
       max_shares: current_user.max_shares || 0
     }
-  enddef destroy_account
+  end
+
+def destroy_account
   user = current_user
 
   ActiveRecord::Base.transaction do
