@@ -146,20 +146,20 @@ class Api::V1::UsersController < ApplicationController
       used_shares: current_user.used_shares,
       max_shares: current_user.max_shares || 0
     }
-  end
-def destroy_account
+  enddef destroy_account
   user = current_user
 
   ActiveRecord::Base.transaction do
-    Log.where(user_id: user.id).delete_all if defined?(Log)
-    UserHorse.where(user_id: user.id).delete_all if defined?(UserHorse)
-    Screenshot.where(user_id: user.id).delete_all if defined?(Screenshot)
+    Log.where(user_id: user.id).delete_all
 
     horse_ids = user.horses.pluck(:id)
+
     if horse_ids.any?
-      SharedLink.where(horse_id: horse_ids).delete_all if defined?(SharedLink)
-      UserHorse.where(horse_id: horse_ids).delete_all if defined?(UserHorse)
+      SharedLink.where(horse_id: horse_ids).delete_all
+      UserHorse.where(horse_id: horse_ids).delete_all
     end
+
+    UserHorse.where(user_id: user.id).delete_all
 
     user.horses.destroy_all
     user.destroy!
