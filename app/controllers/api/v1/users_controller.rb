@@ -157,6 +157,9 @@ def destroy_account
     logs_deleted = Log.where(user_id: user_id).delete_all
     Rails.logger.info "DELETE ACCOUNT [user:#{user_id}] Logs deleted: #{logs_deleted}"
 
+    screenshots_deleted = ScreenshotEvent.where(user_id: user_id).delete_all
+    Rails.logger.info "DELETE ACCOUNT [user:#{user_id}] ScreenshotEvents deleted: #{screenshots_deleted}"
+
     # 2. Get horse IDs before deleting anything
     horse_ids = user.horses.pluck(:id)
     Rails.logger.info "DELETE ACCOUNT [user:#{user_id}] Horse IDs to delete: #{horse_ids}"
