@@ -147,41 +147,43 @@ class Api::V1::UsersController < ApplicationController
       max_shares: current_user.max_shares || 0
     }
   end
-  def destroy_account
-    user = current_user
+  O deploy no Render não apanhou o código novo, ou o UserHorse.where(horse_id: horse_ids) não está a apagar todos os registos. A solução definitiva é usar SQL direto para remover a constraint. Atualize a action:
 
-    ActiveRecord::Base.transaction do
-      Log.where(user_id: user.id).delete_all
+def destroy_account
+  user = current_user
 
-      horse_ids = user.horses.pluck(:id)
+  ActiveRecord::Base.transaction do
+    Log.where(user_id: user.id).delete_all
 
-      # Delete ALL user_horses referencing this user's horses (other users received them)
-      UserHorse.where(horse_id: horse_ids).delete_all if horse_ids.any?
+    horse_ids = user.horses.pluck(:id)
 
-      # Delete ALL user_horses where this user received horses from others
-      UserHorse.where(user_id: user.id).delete_all
+    # Delete ALL user_horses - both by horse_id and user_id
+    ActiveRecord::Base.connection.execute("DELETE FROM user_horses WHERE horse_id IN (#{horse_ids.join(',')})") if horse_ids.any?
+    ActiveRecord::Base.connection.execute("DELETE FROM user_horses WHERE user_id = #{user.id}")
 
-      # Now delete shared links for this user's horses
-      SharedLink.where(horse_id: horse_ids).delete_all if horse_ids.any?
+    # Delete shared links
+    ActiveRecord::Base.connection.execute("DELETE FROM shared_links WHERE horse_id IN (#{horse_ids.join(',')})") if horse_ids.any?
 
-      # Delete horses without callbacks
-      user.horses.each do |horse|
-        horse.ancestors.delete_all
-        horse.images.purge
-        horse.videos.purge
-        horse.delete
-      end
+    # Delete screenshots
+    ActiveRecord::Base.connection.execute("DELETE FROM screenshots WHERE user_id = #{user.id}") rescue nil
 
-      # Finally delete the user
-      user.delete
+    # Delete horses
+    user.horses.each do |horse|
+      horse.ancestors.delete_all
+      horse.images.purge
+      horse.videos.purge
+      horse.delete
     end
 
-    render json: { message: "Account deleted successfully" }, status: :ok
-  rescue => e
-    Rails.logger.error "DELETE ACCOUNT ERROR: #{e.message}"
-    render json: { error: "Error deleting account: #{e.message}" }, status: :unprocessable_entity
+    # Delete user
+    ActiveRecord::Base.connection.execute("DELETE FROM users WHERE id = #{user.id}")
   end
 
+  render json: { message: "Account deleted successfully" }, status: :ok
+rescue => e
+  Rails.logger.error "DELETE ACCOUNT ERROR: #{e.message}"
+  render json: { error: "Error deleting account: #{e.message}" }, status: :unprocessable_entity
+end
   private
 
   def reset_counters_for_free_plan
