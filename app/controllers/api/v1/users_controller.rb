@@ -147,36 +147,41 @@ class Api::V1::UsersController < ApplicationController
       max_shares: current_user.max_shares || 0
     }
   end
-def destroy_account
-  user = current_user
+  def destroy_account
+    user = current_user
 
-  ActiveRecord::Base.transaction do
-    Log.where(user_id: user.id).delete_all
+    ActiveRecord::Base.transaction do
+      Log.where(user_id: user.id).delete_all
 
-    horse_ids = user.horses.pluck(:id)
+      horse_ids = user.horses.pluck(:id)
 
-    if horse_ids.any?
-      SharedLink.where(horse_id: horse_ids).delete_all
-      UserHorse.where(horse_id: horse_ids).delete_all
+      # Delete ALL user_horses referencing this user's horses (other users received them)
+      UserHorse.where(horse_id: horse_ids).delete_all if horse_ids.any?
+
+      # Delete ALL user_horses where this user received horses from others
+      UserHorse.where(user_id: user.id).delete_all
+
+      # Now delete shared links for this user's horses
+      SharedLink.where(horse_id: horse_ids).delete_all if horse_ids.any?
+
+      # Delete horses without callbacks
+      user.horses.each do |horse|
+        horse.ancestors.delete_all
+        horse.images.purge
+        horse.videos.purge
+        horse.delete
+      end
+
+      # Finally delete the user
+      user.delete
     end
 
-    UserHorse.where(user_id: user.id).delete_all
-
-    user.horses.each do |horse|
-      horse.ancestors.delete_all
-      horse.images.purge
-      horse.videos.purge
-      horse.delete
-    end
-
-    user.delete
+    render json: { message: "Account deleted successfully" }, status: :ok
+  rescue => e
+    Rails.logger.error "DELETE ACCOUNT ERROR: #{e.message}"
+    render json: { error: "Error deleting account: #{e.message}" }, status: :unprocessable_entity
   end
 
-  render json: { message: "Account deleted successfully" }, status: :ok
-rescue => e
-  Rails.logger.error "DELETE ACCOUNT ERROR: #{e.message}"
-  render json: { error: "Error deleting account: #{e.message}" }, status: :unprocessable_entity
-end
   private
 
   def reset_counters_for_free_plan
