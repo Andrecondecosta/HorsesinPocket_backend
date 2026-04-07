@@ -148,7 +148,6 @@ class Api::V1::UsersController < ApplicationController
     }
   end
 
-
 def destroy_account
   user = current_user
 
@@ -157,17 +156,13 @@ def destroy_account
 
     horse_ids = user.horses.pluck(:id)
 
-    # Delete ALL user_horses - both by horse_id and user_id
-    ActiveRecord::Base.connection.execute("DELETE FROM user_horses WHERE horse_id IN (#{horse_ids.join(',')})") if horse_ids.any?
+    if horse_ids.any?
+      ActiveRecord::Base.connection.execute("DELETE FROM user_horses WHERE horse_id IN (#{horse_ids.join(',')})")
+      ActiveRecord::Base.connection.execute("DELETE FROM shared_links WHERE horse_id IN (#{horse_ids.join(',')})")
+    end
+
     ActiveRecord::Base.connection.execute("DELETE FROM user_horses WHERE user_id = #{user.id}")
 
-    # Delete shared links
-    ActiveRecord::Base.connection.execute("DELETE FROM shared_links WHERE horse_id IN (#{horse_ids.join(',')})") if horse_ids.any?
-
-    # Delete screenshots
-    ActiveRecord::Base.connection.execute("DELETE FROM screenshots WHERE user_id = #{user.id}") rescue nil
-
-    # Delete horses
     user.horses.each do |horse|
       horse.ancestors.delete_all
       horse.images.purge
@@ -175,7 +170,6 @@ def destroy_account
       horse.delete
     end
 
-    # Delete user
     ActiveRecord::Base.connection.execute("DELETE FROM users WHERE id = #{user.id}")
   end
 
@@ -184,6 +178,7 @@ rescue => e
   Rails.logger.error "DELETE ACCOUNT ERROR: #{e.message}"
   render json: { error: "Error deleting account: #{e.message}" }, status: :unprocessable_entity
 end
+
   private
 
   def reset_counters_for_free_plan
