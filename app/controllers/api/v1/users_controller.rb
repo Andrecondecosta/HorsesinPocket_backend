@@ -157,28 +157,28 @@ def destroy_account
     horse_ids = user.horses.pluck(:id)
 
     if horse_ids.any?
-      ActiveRecord::Base.connection.execute("DELETE FROM user_horses WHERE horse_id IN (#{horse_ids.join(',')})")
-      ActiveRecord::Base.connection.execute("DELETE FROM shared_links WHERE horse_id IN (#{horse_ids.join(',')})")
+      UserHorse.where(horse_id: horse_ids).delete_all
+      SharedLink.where(horse_id: horse_ids).delete_all
     end
 
-    ActiveRecord::Base.connection.execute("DELETE FROM user_horses WHERE user_id = #{user.id}")
+    UserHorse.where(user_id: user.id).delete_all
 
-    user.horses.each do |horse|
+    user.horses.find_each do |horse|
       horse.ancestors.delete_all
       horse.images.purge
       horse.videos.purge
-      horse.delete
+      horse.destroy!
     end
 
-    ActiveRecord::Base.connection.execute("DELETE FROM users WHERE id = #{user.id}")
+    user.destroy!
   end
 
   render json: { message: "Account deleted successfully" }, status: :ok
+
 rescue => e
-  Rails.logger.error "DELETE ACCOUNT ERROR: #{e.message}"
+  Rails.logger.error "DELETE ACCOUNT ERROR: #{e.class}: #{e.message}"
   render json: { error: "Error deleting account: #{e.message}" }, status: :unprocessable_entity
 end
-
   private
 
   def reset_counters_for_free_plan
