@@ -147,7 +147,7 @@ class Api::V1::UsersController < ApplicationController
       max_shares: current_user.max_shares || 0
     }
   end
-  O deploy no Render não apanhou o código novo, ou o UserHorse.where(horse_id: horse_ids) não está a apagar todos os registos. A solução definitiva é usar SQL direto para remover a constraint. Atualize a action:
+
 
 def destroy_account
   user = current_user
