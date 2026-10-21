@@ -23,5 +23,6 @@ ENV RAILS_ENV=production
 # Configura a porta
 EXPOSE 3000
 
-# Comando para iniciar o servidor
-CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]
+# Corre as migrações pendentes e depois inicia o servidor.
+# (O bin/docker-entrypoint não era usado, por isso as migrações nunca corriam no deploy.)
+CMD ["sh", "-c", "bundle exec rails db:migrate && exec bundle exec puma -C config/puma.rb"]
