@@ -26,9 +26,13 @@ module Api
           }
         end
 
+        # Só os campos que o painel usa. Serializar o User inteiro chamava o Stripe
+        # uma vez por utilizador (stripe_default_payment_method) e expunha dados de faturação.
+        ADMIN_USER_FIELDS = %i[id first_name last_name email country admin created_at].freeze
+
         def users
-          @users = User.all
-          render json: @users
+          @users = User.select(ADMIN_USER_FIELDS).order(created_at: :desc)
+          render json: @users.as_json(only: ADMIN_USER_FIELDS)
         end
 
         def horses
