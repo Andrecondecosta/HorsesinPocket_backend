@@ -25,7 +25,6 @@ gem 'ruby-vips', '~> 2.0'
 gem 'mini_magick'
 gem 'mimemagic'
 gem 'marcel'
-gem 'stripe'
 gem 'countries'
 
 

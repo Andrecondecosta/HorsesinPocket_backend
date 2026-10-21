@@ -4,7 +4,6 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       resources :horses do
-        post :share_via_email, on: :member
         post :share_via_link, on: :member
         resources :ancestors, only: [:index, :create, :update, :destroy]
         resources :photos, only: [:create, :destroy]
@@ -54,29 +53,8 @@ Rails.application.routes.draw do
       post   '/device_tokens', to: 'device_tokens#create'
       delete '/device_tokens', to: 'device_tokens#destroy'
 
-      # Rotas de pagamento
-      resources :payments, only: [] do
-        post "create_setup_intent", on: :collection
-        post "create_payment_intent", on: :collection
-      end
-
-      # Rotas de planos
-      get 'get_user_plan', to: 'users#get_user_plan'
-      post '/change_plan', to: 'users#change_plan'
       get '/screenshot_alerts', to: 'users#screenshot_alerts'
 
-      # Rotas do Stripe
-      post '/stripe/customers', to: 'stripe#create_customer'
-      post '/webhooks/stripe', to: 'webhooks#receive'
-
-      resources :subscriptions, only: [] do
-        collection do
-          post 'create_or_renew'
-        end
-      end
-      resources :payments, only: [] do
-        post "cancel_subscription", on: :collection
-      end
 
       # Rotas administrativas
       resources :logs, only: [:index]

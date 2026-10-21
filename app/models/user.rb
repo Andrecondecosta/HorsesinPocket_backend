@@ -59,36 +59,6 @@ class User < ApplicationRecord
   end
 
 
-  def cancel_subscription!
-    update!(
-      plan: "Basic",
-      stripe_subscription_id: nil,
-      subscription_end: nil
-    )
-    adjust_usage_counters
-  end
-
-  def create_stripe_customer!
-    customer = Stripe::Customer.create(
-      email: email,
-      name: name
-    )
-    update!(stripe_customer_id: customer.id)
-  end
-
-  def create_subscription!(price_id)
-    raise "Stripe customer ID not set" if stripe_customer_id.blank?
-
-    trial_days = price_id == "price_1Qo68DDCGWh9lQnCaWeRF1YO" ? 90 : 0  # 🎁 3 meses grátis no Ultimate
-
-    subscription = Stripe::Subscription.create(
-      customer: stripe_customer_id,
-      items: [{ price: price_id }],
-      trial_period_days: trial_days
-    )
-    update!(stripe_subscription_id: subscription.id, subscription_end: Time.current + 1.month)
-  end
-
   def check_and_downgrade_plan
     if subscription_end.present? && Time.current > subscription_end
       Rails.logger.info("⏳ Assinatura expirada para #{email}. Migrando para o plano Basic.")
@@ -111,12 +81,6 @@ class User < ApplicationRecord
     expired_subscriptions.find_each do |user|
       user.check_and_downgrade_plan
     end
-  end
-
-  def stripe_default_payment_method
-    return nil if stripe_customer_id.blank?
-
-    Stripe::Customer.retrieve(stripe_customer_id).invoice_settings.default_payment_method
   end
 
   def self.reset_free_plan_limits
