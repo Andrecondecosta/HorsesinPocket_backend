@@ -42,7 +42,9 @@ class User < ApplicationRecord
   def set_limits_based_on_plan
     puts "🔥 Chamando set_limits_based_on_plan para usuário #{email} com plano: #{plan}"
 
-    limits = PLAN_LIMITS[self.plan] || PLAN_LIMITS["Basic"]
+    # O HorseHub é gratuito: todas as contas têm os limites do plano sem limites,
+    # seja qual for o plano guardado (os planos ficam só como histórico).
+    limits = PLAN_LIMITS["Ultimate"]
     self.max_horses = limits[:horses] || 0
     self.max_shares = limits[:shares] || 0
 
