@@ -118,7 +118,8 @@ class Api::V1::UsersController < ApplicationController
     # Busca todos os cavalos criados pelo utilizador atual que têm aprovações pendentes
     horse_ids = Horse.where(user_id: current_user.id).pluck(:id)
 
-    pending_by_horse = UserHorse.where(horse_id: horse_ids, status: 'pending_approval')
+    pending_by_horse = UserHorse.includes(:user)
+                                .where(horse_id: horse_ids, status: 'pending_approval')
                                 .where.not(user_id: current_user.id)
                                 .group_by(&:horse_id)
 
@@ -129,7 +130,8 @@ class Api::V1::UsersController < ApplicationController
       {
         horse_id: horse.id,
         horse_name: horse.name,
-        alerts: user_horses.map { |uh| { user_horse_id: uh.id } }
+        # user_name: quem tirou a captura (o frontend mostra "<nome> took a screenshot")
+        alerts: user_horses.map { |uh| { user_horse_id: uh.id, user_name: uh.user&.name&.strip.presence } }
       }
     end.compact
 
