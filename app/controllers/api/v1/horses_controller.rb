@@ -341,7 +341,8 @@ def received_horses
                           .order(created_at: :desc)
                           .first
 
-    sender_user = user_horse ? User.find_by(id: user_horse.shared_by) : nil
+    # Quem partilhou; se não estiver registado (partilhas antigas ou pelo registo), o dono do cavalo
+    sender_user = (user_horse && User.find_by(id: user_horse.shared_by)) || horse.creator
 
     horse.as_json.merge({
       images: horse.images.map { |image| url_for(image) },

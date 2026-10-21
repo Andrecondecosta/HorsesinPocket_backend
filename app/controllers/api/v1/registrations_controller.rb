@@ -56,7 +56,8 @@ class Api::V1::RegistrationsController < ApplicationController
       user_horse = UserHorse.create!(
         horse_id: shared_link.horse_id,
         user_id: user.id,
-        shared_by: shared_link.shared_by
+        # Como no login: se o link não guardou quem partilhou, fica o dono do cavalo
+        shared_by: shared_link.shared_by || shared_link.horse.user_id
       )
 
       sender_user = User.find_by(id: shared_link.shared_by)
