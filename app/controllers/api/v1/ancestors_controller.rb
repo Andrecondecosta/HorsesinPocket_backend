@@ -36,9 +36,10 @@ class Api::V1::AncestorsController < ApplicationController
 
       private
 
-      # Define o cavalo com base no parâmetro :horse_id
+      # Só o dono gere o pedigree (antes qualquer pessoa autenticada podia, para qualquer cavalo)
       def set_horse
-        @horse = Horse.find(params[:horse_id])
+        @horse = current_user.horses.find_by(id: params[:horse_id])
+        render json: { error: "Horse not found" }, status: :not_found unless @horse
       end
 
       # Permite apenas os parâmetros permitidos para ancestrais

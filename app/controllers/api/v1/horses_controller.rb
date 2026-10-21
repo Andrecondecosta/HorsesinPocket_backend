@@ -3,6 +3,8 @@ include Rails.application.routes.url_helpers
 class Api::V1::HorsesController < ApplicationController
   skip_before_action :authorized, only: [:shared]
   before_action :set_horse, only: [:show, :update, :destroy, :delete_shares, :share_via_link]
+  # Só o dono altera o cavalo (quem recebeu tem acesso de leitura)
+  before_action :require_owner, only: [:update]
   skip_before_action :authorized, only: [:public_test]
 
 
@@ -494,15 +496,24 @@ end
   end
 
 
+  # Dono, ou quem recebeu com acesso ativo (sem estado conta como ativo).
+  # Acesso revogado ou em pausa por screenshot não abre o cavalo.
   def set_horse
     @horse = Horse
             .left_joins(:user_horses)
-            .where('(horses.user_id = :user_id OR user_horses.user_id = :user_id)', user_id: current_user.id)
+            .where("horses.user_id = :user_id OR (user_horses.user_id = :user_id AND (user_horses.status IS NULL OR user_horses.status = 'active'))",
+                   user_id: current_user.id)
             .find_by(id: params[:id])
 
     unless @horse
       render json: { error: "Cavalo não encontrado ou você não tem permissão para acessá-lo." }, status: :not_found
     end
+  end
+
+  def require_owner
+    return if @horse.user_id == current_user.id
+
+    render json: { error: "Only the owner can change this horse." }, status: :forbidden
   end
 
   # CHANGED: Added :id to ancestors_attributes so existing ancestors are found by ID
