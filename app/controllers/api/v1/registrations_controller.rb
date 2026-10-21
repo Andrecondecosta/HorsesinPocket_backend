@@ -2,13 +2,13 @@ class Api::V1::RegistrationsController < ApplicationController
   skip_before_action :authorized, only: [:create]
   before_action :authorized, except: [:create]
 
+  PROFILE_FIELDS = %i[id email first_name last_name birthdate phone_number
+                      country gender admin plan used_horses used_transfers
+                      used_shares max_horses max_shares subscription_end
+                      subscription_canceled created_at updated_at].freeze
+
   def show
-    render json: current_user.as_json(
-      only: [:id, :email, :first_name, :last_name, :birthdate, :phone_number,
-             :country, :gender, :admin, :plan, :used_horses, :used_transfers,
-             :used_shares, :max_horses, :max_shares, :subscription_end,
-             :subscription_canceled, :created_at, :updated_at]
-    ), status: :ok
+    render json: current_user.as_json(only: PROFILE_FIELDS), status: :ok
   end
 
   def create
@@ -18,21 +18,11 @@ class Api::V1::RegistrationsController < ApplicationController
       return render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
     end
 
+    # O HorseHub é gratuito: a conta nova fica no plano sem limites ("Ultimate"),
+    # sem cliente nem subscrição no Stripe. Sem subscription_end, nunca é despromovida.
+    user.plan = "Ultimate"
+
     begin
-      customer = Stripe::Customer.create(email: user.email)
-
-      subscription = Stripe::Subscription.create(
-        customer: customer.id,
-        items: [{ price: "price_1Qo68DDCGWh9lQnCaWeRF1YO" }],
-        trial_period_days: 365,
-        expand: ["latest_invoice.payment_intent"]
-      )
-
-      user.stripe_customer_id     = customer.id
-      user.plan                   = "Ultimate"
-      user.stripe_subscription_id = subscription.id
-      user.subscription_end       = Time.at(subscription.current_period_end)
-
       user.save!
 
       if params[:shared_token].present?
@@ -43,10 +33,6 @@ class Api::V1::RegistrationsController < ApplicationController
 
       render json: { token: token, message: "Usuário criado com sucesso!" }, status: :created
 
-    rescue Stripe::StripeError => e
-      Rails.logger.error "Stripe error: #{e.message}"
-      render json: { error: "Registration failed due to a payment service error. Please try again." }, status: :service_unavailable
-
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error "DB error: #{e.message}"
       render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
@@ -55,7 +41,8 @@ class Api::V1::RegistrationsController < ApplicationController
 
   def update
     if current_user.update(user_params)
-      render json: current_user, status: :ok
+      # Mesmos campos do GET /profile; o User inteiro chamava o Stripe (stripe_default_payment_method)
+      render json: current_user.as_json(only: PROFILE_FIELDS), status: :ok
     else
       render json: { errors: current_user.errors.full_messages }, status: :unprocessable_entity
     end
