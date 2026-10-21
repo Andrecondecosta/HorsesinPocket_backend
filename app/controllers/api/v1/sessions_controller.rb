@@ -22,8 +22,11 @@ class Api::V1::SessionsController < ApplicationController
 
             if user_horse.persisted?
               Rails.logger.info("✅ User #{user.id} already has horse #{horse.id}. No action necessary.")
+              shared_link.grant_permissions_to(user_horse)
+              user_horse.save! if user_horse.changed?
             else
               user_horse.shared_by = shared_link.shared_by || horse.user_id
+              shared_link.grant_permissions_to(user_horse)
               user_horse.save!
               Rails.logger.info("✅ Horse #{horse.id} successfully added to user #{user.id}.")
 

@@ -10,6 +10,15 @@ class Horse < ApplicationRecord
   accepts_nested_attributes_for :ancestors, allow_destroy: true
 
   validates :name, :age, :height_cm, :gender, :color, presence: true
+
+  # O dono pode sempre partilhar; quem recebeu, só se lhe deram essa permissão
+  def shareable_by?(user)
+    return false unless user
+    return true if user_id == user.id
+
+    # status vazio conta como ativo (partilhas antigas); em pausa ou revogado não partilha
+    user_horses.where(user_id: user.id, can_reshare: true, status: [nil, 'active']).exists?
+  end
   validates :gender, inclusion: { in: ['Gelding', 'Mare', 'Stallion'], message: "%{value} is not a valid gender" }
   validates :training_level, length: { maximum: 100 }
   validates :color, length: { maximum: 20 } # Ajuste do comprimento de cor para aceitar mais valores

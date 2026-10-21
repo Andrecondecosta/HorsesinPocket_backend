@@ -25,6 +25,7 @@ class Api::V1::HorsesController < ApplicationController
     horse = Horse.find(params[:id])
     render json: horse.as_json.merge(
       is_owner: horse.creator == current_user,
+      can_share: horse.shareable_by?(current_user),
       images: horse.images.map { |image| url_for(image) },
       videos: horse.videos.map { |video| url_for(video) },
       ancestors: horse.ancestors
@@ -198,6 +199,13 @@ class Api::V1::HorsesController < ApplicationController
 
 
   def share_via_link
+    unless @horse.shareable_by?(current_user)
+      return render json: { error: "You are not allowed to share this horse." }, status: :forbidden
+    end
+
+    # Quem partilha decide se a pessoa que recebe pode voltar a partilhar
+    can_reshare = ActiveModel::Type::Boolean.new.cast(params[:can_reshare]) || false
+
     if current_user.used_shares.to_i >= current_user.max_shares.to_i
       return render json: { error: "❌ Você atingiu o limite de #{current_user.max_shares} partilhas no plano #{current_user.plan}. Faça upgrade para continuar." }, status: :forbidden
     end
@@ -205,7 +213,8 @@ class Api::V1::HorsesController < ApplicationController
     Rails.logger.info "🚀 Iniciando compartilhamento do cavalo com ID: #{@horse.id}"
 
     ActiveRecord::Base.transaction do
-      recent_link = SharedLink.where(horse_id: @horse.id, shared_by: current_user.id)
+      # Proteção contra cliques duplos: reaproveita um link igual criado há instantes, se ainda não foi usado
+      recent_link = SharedLink.where(horse_id: @horse.id, shared_by: current_user.id, can_reshare: can_reshare, status: 'active')
                               .where("created_at >= ?", 2.seconds.ago)
                               .order(created_at: :desc)
                               .limit(1)
@@ -220,7 +229,8 @@ class Api::V1::HorsesController < ApplicationController
         token: SecureRandom.urlsafe_base64(10),
         expires_at: params[:expires_at],
         status: 'active',
-        shared_by: current_user.id
+        shared_by: current_user.id,
+        can_reshare: can_reshare
       )
 
       Rails.logger.info "✅ Novo link criado: #{shared_link.token}"
@@ -286,12 +296,15 @@ class Api::V1::HorsesController < ApplicationController
 
     if user_horse.persisted?
       Rails.logger.info "✅ User #{current_user.id} has already received horse ID #{shared_link.horse_id}. No action necessary."
+      shared_link.grant_permissions_to(user_horse)
+      user_horse.save! if user_horse.changed?
     else
       sender_user = User.find_by(id: shared_link.shared_by)
       sender_name = sender_user ? "#{sender_user.first_name} #{sender_user.last_name}".strip : "Unknown"
       recipient_name = "#{current_user.first_name} #{current_user.last_name}".strip
 
       user_horse.shared_by = shared_link.shared_by || shared_link.horse.user_id
+      shared_link.grant_permissions_to(user_horse)
       user_horse.save!
       Rails.logger.info "✅ Horse ID #{shared_link.horse_id} successfully added to user #{current_user.id}."
 
@@ -347,7 +360,8 @@ def received_horses
     horse.as_json.merge({
       images: horse.images.map { |image| url_for(image) },
       sender_name: sender_user&.name || 'Desconhecido',
-      status: user_horse&.status || 'active'
+      status: user_horse&.status || 'active',
+      can_reshare: user_horse&.can_reshare || false
     })
   }
 end

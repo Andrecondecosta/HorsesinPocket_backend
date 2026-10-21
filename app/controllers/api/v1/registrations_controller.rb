@@ -53,12 +53,14 @@ class Api::V1::RegistrationsController < ApplicationController
     return unless shared_link
 
     ActiveRecord::Base.transaction do
-      user_horse = UserHorse.create!(
+      user_horse = UserHorse.new(
         horse_id: shared_link.horse_id,
         user_id: user.id,
         # Como no login: se o link não guardou quem partilhou, fica o dono do cavalo
         shared_by: shared_link.shared_by || shared_link.horse.user_id
       )
+      shared_link.grant_permissions_to(user_horse)
+      user_horse.save!
 
       sender_user = User.find_by(id: shared_link.shared_by)
       sender_name = sender_user ? "#{sender_user.first_name} #{sender_user.last_name}" : "Unknown"

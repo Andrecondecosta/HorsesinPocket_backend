@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_21_160000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_21_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -135,6 +135,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_21_160000) do
     t.datetime "used_at"
     t.integer "user_id"
     t.integer "shared_by"
+    t.boolean "can_reshare", default: false, null: false
     t.index ["horse_id"], name: "index_shared_links_on_horse_id"
     t.index ["token"], name: "index_shared_links_on_token", unique: true
   end
@@ -157,6 +158,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_21_160000) do
     t.datetime "updated_at", null: false
     t.integer "shared_by"
     t.string "status"
+    t.boolean "can_reshare", default: false, null: false
     t.index ["horse_id"], name: "index_user_horses_on_horse_id"
     t.index ["user_id"], name: "index_user_horses_on_user_id"
   end

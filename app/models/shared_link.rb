@@ -17,6 +17,12 @@ class SharedLink < ApplicationRecord
     !expired? && used_at.nil? && status == 'active'
   end
 
+  # Passa a permissão de voltar a partilhar para quem recebe pelo link.
+  # Só acrescenta: um link sem permissão não tira a que a pessoa já tenha.
+  def grant_permissions_to(user_horse)
+    user_horse.can_reshare = true if can_reshare
+  end
+
   # Marca o link como usado
   def mark_as_used!
     update!(used_at: Time.current, status: 'used')
